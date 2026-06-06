@@ -170,3 +170,39 @@ sys_waitpid(void)
   extern int waitpid(int, uint64, int);
   return waitpid(pid, addr, options);
 }
+
+uint64
+sys_sem_alloc(void)
+{
+  int init_val;
+  argint(0, &init_val);
+  extern uint64 sem_alloc(int);
+  return sem_alloc(init_val);
+}
+
+uint64
+sys_sem_free(void)
+{
+  uint64 sem_addr;
+  argaddr(0, &sem_addr);
+  extern int sem_free(uint64);
+  return sem_free(sem_addr);
+}
+
+uint64
+sys_sem_wait(void)
+{
+  uint64 sem_addr;
+  argaddr(0, &sem_addr);
+  extern int sem_wait(uint64);
+  return sem_wait(sem_addr);
+}
+
+uint64
+sys_sem_signal(void)
+{
+  uint64 sem_addr;
+  argaddr(0, &sem_addr);
+  extern int sem_signal(uint64);
+  return sem_signal(sem_addr);
+}

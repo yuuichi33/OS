@@ -8,6 +8,7 @@ OBJS = \
   $K/printf.o \
   $K/uart.o \
   $K/kalloc.o \
+  $K/sem.o \
   $K/spinlock.o \
   $K/string.o \
   $K/main.o \
@@ -139,6 +140,7 @@ UPROGS=\
 	$U/_sched\
 	$U/_schedtest\
 	$U/_waitpidtest\
+	$U/_semtest\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)

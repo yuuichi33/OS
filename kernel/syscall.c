@@ -105,6 +105,10 @@ extern uint64 sys_getprocs(void);
 extern uint64 sys_kmalloctest(void);
 extern uint64 sys_sched_switch(void);
 extern uint64 sys_waitpid(void);
+extern uint64 sys_sem_alloc(void);
+extern uint64 sys_sem_free(void);
+extern uint64 sys_sem_wait(void);
+extern uint64 sys_sem_signal(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -134,6 +138,10 @@ static uint64 (*syscalls[])(void) = {
 [SYS_kmalloctest] sys_kmalloctest,
 [SYS_sched_switch] sys_sched_switch,
 [SYS_waitpid] sys_waitpid,
+[SYS_sem_alloc]   sys_sem_alloc,
+[SYS_sem_free]    sys_sem_free,
+[SYS_sem_wait]    sys_sem_wait,
+[SYS_sem_signal]  sys_sem_signal,
 };
 
 void

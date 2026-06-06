@@ -34,6 +34,11 @@ int kmalloctest(void);
 int sched_switch(int);
 #define WNOHANG 1
 int waitpid(int, int*, int);
+uint64 sem_alloc(int);
+int sem_free(uint64);
+int sem_wait(uint64);
+int sem_signal(uint64);
+
 
 // ulib.c
 int stat(const char*, struct stat*);

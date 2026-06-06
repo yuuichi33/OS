@@ -23,6 +23,7 @@ struct test_case tests[] = {
   { "Sched: Switch to RR", "sched", {"sched", "0", 0}, 0 },
   { "Sched: RR scheduling", "schedtest", {"schedtest", 0}, 0 },
   { "Process: waitpid mechanism", "waitpidtest", {"waitpidtest", 0}, 0 },
+  { "Process: Semaphore mechanism", "semtest",  {"semtest", 0}, 0 },
   // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };
 

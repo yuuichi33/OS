@@ -240,6 +240,8 @@ graph TB
 - 系统测试：运行 xv6 原生测试集 usertests ，全面验证进程管理、内存管理、文件系统及系统调用等核心功能的正确性与兼容性。
 - 集成测试：实现统一测试框架 alltests.c，对新增功能测试、异常测试以及 xv6 原生 usertests 进行统一调度，实现一键式自动化测试。通过集成运行验证各模块之间的兼容性与协同工作能力，并检查系统整体稳定性。
 
+- [测试说明文档](devlog/test.md) `(devlog/test.md)`
+
 ### 2.6 开发过程中想到的其他内容
 
 - FCFS RR ( SJF NP-FP ) 
@@ -260,7 +262,7 @@ graph TB
 - 阶段三：核心进程管理、调度与同步（Core Process & Sync）
   - [x] FCFS 调度器：引入创建时间戳，实现非抢占 FCFS 与 RR 的动态切换。
   - [x] waitpid：扩展进程回收机制，支持回收指定子进程。
-  - [x] Semaphore（信号量）：基于自旋锁与 sleep/wakeup 实现，由于有了 kmalloc，此时可以优雅地实现 sem_alloc/sem_free。
+  - [x] Semaphore（信号量）：基于自旋锁与 sleep/wakeup 实现，由于有了 kmalloc，此时可以实现 sem_alloc/sem_free。
   - [ ] Alarm 异步事件通知：基于时钟中断、Trapframe 现场保存与恢复实现定时通知。
 
 - 阶段四：文件系统增强（File System）
@@ -285,7 +287,7 @@ graph TB
   - [ ] 模块单元测试
   - [ ] 集成测试与原生 usertests 压力测试
   - [ ] 一键自动化测试框架 alltests 跑通
-  
+
 ## 四、具体完成工作
 
 ### 4.1 基础环境与系统分析
@@ -337,6 +339,10 @@ graph TB
   <center><img src="figs/fig4.png" width="50%"></center>
  
 - Semaphore（信号量）
+  - 在 sem_alloc 中利用 kmalloc() 动态申请信号量结构体，并将 64 位内核指针句柄传回用户态；释放时通过 kmfree() 彻底回收内存归还给堆。
+  - 采用信号量自身的内存地址作为 xv6 sleep/wakeup 的共享通道。P 操作（sem_wait）在资源不足时将进程挂起，V 操作（sem_signal）在释放资源时精准唤醒通道上的等待进程。
+  - 编写 semtest.c，覆盖非法句柄防御、非阻塞 P/V、阻塞式同步（sleep/wakeup）、以及 50 次循环分配与释放的内核堆内存泄漏（Stress）测试，将其接入测试框架 alltests，全量测试顺利通过（`PASS: 12/12`）。
+  <center><img src="figs/fig5.png" width="50%"></center>
 
 ## 参考资料
 

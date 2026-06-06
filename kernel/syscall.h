@@ -24,3 +24,7 @@
 #define SYS_kmalloctest 23
 #define SYS_sched_switch 24
 #define SYS_waitpid 25
+#define SYS_sem_alloc  26
+#define SYS_sem_free   27
+#define SYS_sem_wait   28
+#define SYS_sem_signal 29

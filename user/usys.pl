@@ -40,3 +40,7 @@ entry("getprocs");
 entry("kmalloctest");
 entry("sched_switch");
 entry("waitpid");
+entry("sem_alloc");
+entry("sem_free");
+entry("sem_wait");
+entry("sem_signal");
