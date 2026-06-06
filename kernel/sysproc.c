@@ -91,3 +91,47 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+struct uproc {
+  int pid;
+  int state;
+  uint64 sz;
+  char name[16];
+};
+
+uint64
+sys_getprocs(void)
+{
+  int max;
+  uint64 uaddr;
+  struct proc *p;
+  struct uproc kprocs[64]; 
+  int count = 0;
+  extern struct proc proc[];
+
+  argint(0, &max);
+  argaddr(1, &uaddr);
+
+  if(max > 64) max = 64;
+  if(max < 0) return -1;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED) {
+      if(count < max) {
+        kprocs[count].pid = p->pid;
+        kprocs[count].state = p->state;
+        kprocs[count].sz = p->sz;
+        safestrcpy(kprocs[count].name, p->name, sizeof(p->name));
+        count++;
+      }
+    }
+    release(&p->lock);
+  }
+
+  // 安全检查会在 copyout 中进行
+  if(copyout(myproc()->pagetable, uaddr, (char*)kprocs, count * sizeof(struct uproc)) < 0)
+    return -1;
+
+  return count; 
+}

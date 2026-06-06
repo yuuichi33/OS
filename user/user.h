@@ -1,5 +1,12 @@
 struct stat;
 
+struct uproc {
+  int pid;
+  int state;
+  uint64 sz;
+  char name[16];
+};
+
 // system calls
 int fork(void);
 int exit(int) __attribute__((noreturn));
@@ -22,6 +29,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int getprocs(int, struct uproc*);
 
 // ulib.c
 int stat(const char*, struct stat*);

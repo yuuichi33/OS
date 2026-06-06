@@ -291,13 +291,19 @@ graph TB
 
 ### 4.2 系统调用、异常防护与动态内存
 - [分析](devlog/phase2_sc.md) `devlog/phase2_sc.md`
+
 - 用户态异常捕获
   - 修改 trap.c 中的 usertrap()，实现对非法指令（scause 2）与内存越界读写（scause 13/15）的分类识别。
   - 发生异常时，内核打印错误地址与指令并强制结束该进程（exit(-1)），保证内核和其他进程正常运行不崩溃。
 - 集成测试框架（alltests）
   - 编写 alltests.c 自动测试程序，通过 fork 一键运行所有测试并比对退出状态码。
   - 一键跑通了包含正常调用、非法指令、非法读写在内的全部 4 个测试用例（PASS: 4/4）。
-  ![alt text](figs/fig2.png)
+- getprocs 系统调用
+  - 结构体 struct uproc 用于在内核与用户态间传递 PID、状态、内存大小及进程名。
+  - 实现 sys_getprocs，遍历全局进程表，通过 copyout 安全地将打包数据拷贝至用户空间。
+- 用户态 ps 命令
+  - 编写 ps.c 工具，打印进程状态。
+  - 将 ps 接入测试框架 alltests，测试结果全量通过（PASS: 5/5）。
 
 
 ## 参考资料

@@ -10,11 +10,12 @@ struct test_case {
 
 // 定义要运行的所有测试用例
 struct test_case tests[] = {
-//   { "System call: ps", "ps", {"ps", 0}, 0 },
   { "Exception: Illegal Instruction", "crash_test", {"crash_test", "1", 0}, -1 },
   { "Exception: Invalid Read", "crash_test", {"crash_test", "2", 0}, -1 },
   { "Exception: Invalid Write", "crash_test", {"crash_test", "3", 0}, -1 },
   { "Exception: Write to Code", "crash_test", {"crash_test", "4", 0}, -1 },
+  { "System call: ps", "ps", {"ps", 0}, 0 },
+
   // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };
 
