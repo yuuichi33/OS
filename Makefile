@@ -135,6 +135,7 @@ UPROGS=\
 	$U/_crash_test\
 	$U/_alltests\
 	$U/_ps\
+	$U/_kmalloctest\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)

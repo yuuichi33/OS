@@ -284,7 +284,7 @@ graph TB
 - 构建 Windows 11 (VSCode) + SSH 远程连接 + Ubuntu 22.04 虚拟机的开发架构。
 - 完成 RISC-V 交叉编译器（gcc-riscv64）、调试器与 QEMU 模拟器的配置。
 - 初始化 GitHub 仓库 https://github.com/yuuichi33/OS 并完成首次推送。
-- 新建并切换至独立开发分支 dev，强制回滚（git reset --hard）至 2022 年底稳定提交 74c1eba，避开后续版本对 QEMU >= 7.2 的编译限制，确保了本地兼容性。
+- 新建并切换至独立开发分支 dev，强制回滚至 2022 年底稳定提交 74c1eba，避开后续版本对 QEMU >= 7.2 的编译限制，确保兼容性。
 - 通过 make qemu 成功编译并启动系统。
 - 在模拟器中全量跑通内核测试集 usertests，测试结果为 ALL TESTS PASSED。
 ![alt text](figs/fig1.png)
@@ -304,6 +304,12 @@ graph TB
 - 用户态 ps 命令
   - 编写 ps.c 工具，打印进程状态。
   - 将 ps 接入测试框架 alltests，测试结果全量通过（PASS: 5/5）。
+- 设计并实现内核动态内存分配器（kmalloc/kmfree）
+  - 基于首部链表（First-Fit Header）实现。申请时自动进行 8 字节对齐并按需拆分空闲块；无可用块时，向底层页分配器索要全新物理页。
+  - 在 kmfree 中实现了物理连续空闲块的自动检测与合并，有效防止了内存碎片的产生。
+  - 使用独立的自旋锁保护分配链表，保证了多 CPU 并发分配下的数据安全。
+  - 编写 kmalloctest.c 单元测试，并将其接入 alltests 集成测试框架，测试顺利通过（`PASS: 6/6`）。
+![alt text](figs/fig2.png)
 
 
 ## 参考资料

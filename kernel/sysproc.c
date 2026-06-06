@@ -135,3 +135,10 @@ sys_getprocs(void)
 
   return count; 
 }
+
+uint64
+sys_kmalloctest(void)
+{
+  extern int kmalloctest_run(void);
+  return kmalloctest_run();
+}

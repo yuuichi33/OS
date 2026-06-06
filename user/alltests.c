@@ -15,7 +15,7 @@ struct test_case tests[] = {
   { "Exception: Invalid Write", "crash_test", {"crash_test", "3", 0}, -1 },
   { "Exception: Write to Code", "crash_test", {"crash_test", "4", 0}, -1 },
   { "System call: ps", "ps", {"ps", 0}, 0 },
-
+  { "Memory: kmalloc/kmfree", "kmalloctest", {"kmalloctest", 0}, 0 },
   // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };
 
