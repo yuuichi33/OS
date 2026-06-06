@@ -38,3 +38,4 @@ entry("sleep");
 entry("uptime");
 entry("getprocs");
 entry("kmalloctest");
+entry("sched_switch");

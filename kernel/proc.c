@@ -10,6 +10,8 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+int sched_mode = 0;  // 0 为轮转 (RR)，1 为 FCFS
+
 struct proc *initproc;
 
 int nextpid = 1;
@@ -124,6 +126,8 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->ctime = ticks;  // 
+
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -454,21 +458,49 @@ scheduler(void)
     // processes are waiting.
     intr_on();
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+    if(sched_mode == 0) {
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          // Switch to chosen process.  It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+        }
+        release(&p->lock);
       }
-      release(&p->lock);
+    } else {
+      //FCFS
+      struct proc *first_p = 0;
+
+      // 寻找最早创建且处于 RUNNABLE 状态的进程
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          if(first_p == 0 || p->ctime < first_p->ctime) {
+            if(first_p)
+              release(&first_p->lock); // 释放上一个临时选中的进程锁
+            first_p = p;
+            continue; // 保持当前最先创建进程的锁处于 acquire 状态
+          }
+        }
+        release(&p->lock);
+      }
+
+      // 运行选出的最老进程
+      if(first_p) {
+        first_p->state = RUNNING;
+        c->proc = first_p;
+        swtch(&c->context, &first_p->context);
+        c->proc = 0;
+        release(&first_p->lock);
+      }
     }
   }
 }

@@ -104,7 +104,8 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  extern int sched_mode; // FCFS NP
+  if(which_dev == 2 && sched_mode == 0)
     yield();
 
   usertrapret();
@@ -178,7 +179,8 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+  extern int sched_mode; // FCFS NP
+  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING && sched_mode == 0)
     yield();
 
   // the yield() may have caused some traps to occur,

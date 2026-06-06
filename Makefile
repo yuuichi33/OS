@@ -136,6 +136,8 @@ UPROGS=\
 	$U/_alltests\
 	$U/_ps\
 	$U/_kmalloctest\
+	$U/_sched\
+	$U/_schedtest\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)

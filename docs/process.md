@@ -2,6 +2,7 @@
 
 - 姓名：袁善
 - 学号：20231072030
+- 邮箱：shanyuan.dlut@gmail.com
 - 日期：2026年6月6日
 
 ## 一、项目摘要
@@ -9,8 +10,8 @@
 - **基准**：基于 `MIT xv6-riscv(https://github.com/mit-pdos/xv6-riscv)`，代码基线回退至 2023 年 1 月前的稳定状态。
 - **目标**：在完成课程要求功能的前提下，引入部分现代 Unix/Linux 内核设计思想，提高系统的完整性与可扩展性。
 - **开发模式**：采用 `Windows (VSCode) + 远程连接 (SSH) + 虚拟机 (Ubuntu 22.04) + 模拟器 (QEMU)` 开发架构。
-- **仓库地址**：`https://github.com/yuuichi33/OS` 目前是 private 状态。
-- **预期成果**：可运行源代码 + 技术文档 + 演示文稿 + 视频
+- **仓库地址**：`https://github.com/yuuichi33/OS` 目前是 private 状态，验收前会改成 public 状态。
+- **交付物**：可运行源代码 + 技术文档 + 演示文稿 + 视频 （对照课程评分标准）
 
 ```mermaid
 graph TB
@@ -216,7 +217,7 @@ graph TB
         1. **编写系统状态程序 `ps.c`**：在内核中增加 `sys_getprocs` 系统调用，用于将进程表中活跃进程的状态、名称、PID 和父进程信息安全拷贝至用户态，再在用户态 `ps.c` 中进行格式化输出。
         2. 确保在 `usertrap` 中正确拦截由于用户态程序引发的非法内存访问和非法指令执行等异常事件。在异常发生时，由内核强制终止（Kill）该出错的用户进程并调用 `exit` 回收其所有资源，确保用户程序崩溃时，内核不会 Panic，整体系统持续稳定。
 
-### 2.4 其他扩展功能设计
+### 2.4 额外扩展功能设计
 
 除课程设计要求外，计划进一步扩展以下高级功能（可选），逐步向现代 Unix/Linux 内核设计靠拢。
 
@@ -236,6 +237,10 @@ graph TB
 - 异常测试：构造非法内存访问和异常系统调用场景，验证系统异常隔离能力和资源回收能力。
 - 压力测试：利用 xv6 原生测试集 usertests，验证系统稳定性。
 - 集成测试：集成上述测试。
+
+### 2.6 开发过程中想到的其他内容
+
+- FCFS RR ( SJF NP-FP ) 
 
 ## 三、任务清单及进度规划
 
@@ -290,7 +295,7 @@ graph TB
 ![alt text](figs/fig1.png)
 
 ### 4.2 系统调用、异常防护与动态内存
-- [分析](devlog/phase2_sc.md) `devlog/phase2_sc.md`
+- [分析](devlog/phase2.md) `(devlog/phase2.md)`
 
 - 用户态异常捕获
   - 修改 trap.c 中的 usertrap()，实现对非法指令（scause 2）与内存越界读写（scause 13/15）的分类识别。
@@ -304,13 +309,23 @@ graph TB
 - 用户态 ps 命令
   - 编写 ps.c 工具，打印进程状态。
   - 将 ps 接入测试框架 alltests，测试结果全量通过（PASS: 5/5）。
-- 设计并实现内核动态内存分配器（kmalloc/kmfree）
+- 内核动态内存分配器（kmalloc/kmfree）
   - 基于首部链表（First-Fit Header）实现。申请时自动进行 8 字节对齐并按需拆分空闲块；无可用块时，向底层页分配器索要全新物理页。
   - 在 kmfree 中实现了物理连续空闲块的自动检测与合并，有效防止了内存碎片的产生。
   - 使用独立的自旋锁保护分配链表，保证了多 CPU 并发分配下的数据安全。
   - 编写 kmalloctest.c 单元测试，并将其接入 alltests 集成测试框架，测试顺利通过（`PASS: 6/6`）。
 ![alt text](figs/fig2.png)
 
+### 4.3 核心进程管理、调度与同步
+- [分析](devlog/phase3.md) `(devlog/phase3.md)`
+
+- FCFS 调度器
+  - 创建 ctime 时间戳，在 proc.c 的 scheduler() 中实现 FCFS 策略，调度时选取 ctime 最小（最早创建）的就绪进程。
+  - 修改 trap.c 实现非抢占的 FCFS。
+  - 新增 sched_switch 系统调用和 sche` 命令，支持切换调度模式。
+  - 编写 schedtest 并接入 alltests。FCFS 模式下子进程完全顺序执行；RR 模式下子进程交替并发（打印交错）。测试结果全量通过（`PASS: 10/10`）。
+  ![alt text](figs/fig3.png)
+- waitpid
 
 ## 参考资料
 

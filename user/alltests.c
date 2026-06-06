@@ -8,14 +8,20 @@ struct test_case {
   int expected_exit_status;   // 预期的退出状态码 (0表示正常运行，-1表示预期崩溃)
 };
 
-// 定义要运行的所有测试用例
+// 测试用例
 struct test_case tests[] = {
+  // phase2
   { "Exception: Illegal Instruction", "crash_test", {"crash_test", "1", 0}, -1 },
   { "Exception: Invalid Read", "crash_test", {"crash_test", "2", 0}, -1 },
   { "Exception: Invalid Write", "crash_test", {"crash_test", "3", 0}, -1 },
   { "Exception: Write to Code", "crash_test", {"crash_test", "4", 0}, -1 },
   { "System call: ps", "ps", {"ps", 0}, 0 },
   { "Memory: kmalloc/kmfree", "kmalloctest", {"kmalloctest", 0}, 0 },
+  // phase3
+  { "Sched: Switch to FCFS", "sched", {"sched", "1", 0}, 0 },
+  { "Sched: FCFS scheduling", "schedtest", {"schedtest", 0}, 0 },
+  { "Sched: Switch to RR", "sched", {"sched", "0", 0}, 0 },
+  { "Sched: RR scheduling", "schedtest", {"schedtest", 0}, 0 },
   // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };
 

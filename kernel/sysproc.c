@@ -142,3 +142,16 @@ sys_kmalloctest(void)
   extern int kmalloctest_run(void);
   return kmalloctest_run();
 }
+
+uint64
+sys_sched_switch(void)
+{
+  int mode;
+  argint(0, &mode);
+  if(mode == 0 || mode == 1){
+    extern int sched_mode;
+    sched_mode = mode;
+    return 0;
+  }
+  return -1;
+}

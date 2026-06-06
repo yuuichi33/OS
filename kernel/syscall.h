@@ -22,3 +22,4 @@
 #define SYS_close  21
 #define SYS_getprocs 22
 #define SYS_kmalloctest 23
+#define SYS_sched_switch 24
