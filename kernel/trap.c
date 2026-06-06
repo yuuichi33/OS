@@ -68,8 +68,35 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    // 细化拦截并处理用户态异常，确保内核稳定
+    uint64 scause = r_scause();
+    uint64 stval = r_stval(); // 发生异常的地址
+    uint64 sepc = r_sepc();   // 发生异常的指令地址
+
+    switch (scause) {
+      case 2: // 非法指令 (Illegal Instruction)
+        printf("\n[Kernel Exception] Process %d (%s) killed due to: Illegal Instruction\n", p->pid, p->name);
+        printf("                   at PC: %p, Instruction: %p\n", sepc, stval);
+        break;
+      case 13: // 读段错误 (Load Page Fault / Segmentation fault)
+        printf("\n[Kernel Exception] Process %d (%s) killed due to: Segmentation Fault (Invalid Read)\n", p->pid, p->name);
+        printf("                   at PC: %p, Accessing Address: %p\n", sepc, stval);
+        break;
+      case 15: // 写段错误 (Store Page Fault / Segmentation fault)
+        printf("\n[Kernel Exception] Process %d (%s) killed due to: Segmentation Fault (Invalid Write)\n", p->pid, p->name);
+        printf("                   at PC: %p, Accessing Address: %p\n", sepc, stval);
+        break;
+      case 12: // 执行段错误 (Instruction Page Fault)
+        printf("\n[Kernel Exception] Process %d (%s) killed due to: Instruction Page Fault (Execution Denied)\n", p->pid, p->name);
+        printf("                   at PC: %p\n", sepc);
+        break;
+      default: // 其他未细化的异常
+        printf("\n[Kernel Exception] Process %d (%s) killed due to: Unknown Exception (scause %p)\n", p->pid, p->name, scause);
+        printf("                   at PC: %p, stval: %p\n", sepc, stval);
+        break;
+    }
+    
+    // 标记进程被杀死，退出码为 -1
     setkilled(p);
   }
 
