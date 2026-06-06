@@ -32,6 +32,8 @@ int uptime(void);
 int getprocs(int, struct uproc*);
 int kmalloctest(void);
 int sched_switch(int);
+#define WNOHANG 1
+int waitpid(int, int*, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

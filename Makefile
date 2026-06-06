@@ -138,6 +138,7 @@ UPROGS=\
 	$U/_kmalloctest\
 	$U/_sched\
 	$U/_schedtest\
+	$U/_waitpidtest\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)

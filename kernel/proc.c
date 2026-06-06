@@ -718,3 +718,59 @@ procdump(void)
     printf("\n");
   }
 }
+
+// waitpid：支持回收特定 PID 和非阻塞 WNOHANG
+int
+waitpid(int target_pid, uint64 addr, int options)
+{
+  struct proc *pp;
+  int havekids, pid;
+  struct proc *p = myproc();
+
+  acquire(&wait_lock);
+
+  for(;;){
+    havekids = 0;
+    for(pp = proc; pp < &proc[NPROC]; pp++){
+      if(pp->parent == p){
+        // 如果指定了特定 PID，跳过不相符的子进程
+        if(target_pid > 0 && pp->pid != target_pid)
+          continue;
+
+        acquire(&pp->lock);
+        havekids = 1;
+
+        if(pp->state == ZOMBIE){
+          // 找到目标僵尸子进程，进行回收
+          pid = pp->pid;
+          if(addr != 0 && copyout(p->pagetable, addr, (char *)&pp->xstate,
+                                  sizeof(pp->xstate)) < 0) {
+            release(&pp->lock);
+            release(&wait_lock);
+            return -1;
+          }
+          freeproc(pp);
+          release(&pp->lock);
+          release(&wait_lock);
+          return pid;
+        }
+        release(&pp->lock);
+      }
+    }
+
+    // 如果根本没有符合条件的子进程，或者父进程已被杀，返回 -1
+    if(!havekids || killed(p)){
+      release(&wait_lock);
+      return -1;
+    }
+
+    // 如果开启了非阻塞选项 WNOHANG (值为 1)，且子进程未退出，立即返回 0
+    if(options == 1){
+      release(&wait_lock);
+      return 0;
+    }
+    
+    // 否则，父进程挂起等待子进程退出
+    sleep(p, &wait_lock);
+  }
+}

@@ -1,3 +1,5 @@
+<!-- <div class="markdown-body"> -->
+
 # 进度汇报
 
 - 姓名：袁善
@@ -7,9 +9,9 @@
 
 ## 一、项目摘要
 - **课设选题：方案 A：OS 内核实现**
-- **基准**：基于 `MIT xv6-riscv(https://github.com/mit-pdos/xv6-riscv)`，代码基线回退至 2023 年 1 月前的稳定状态。
+- **基准**：基于 **MIT xv6-riscv**`(https://github.com/mit-pdos/xv6-riscv)`，代码基线回退至 2023 年 1 月前的稳定状态。
 - **目标**：在完成课程要求功能的前提下，引入部分现代 Unix/Linux 内核设计思想，提高系统的完整性与可扩展性。
-- **开发模式**：采用 `Windows (VSCode) + 远程连接 (SSH) + 虚拟机 (Ubuntu 22.04) + 模拟器 (QEMU)` 开发架构。
+- **开发模式**：采用 Windows (VSCode) + 远程连接 (SSH) + 虚拟机 (Ubuntu 22.04) + 模拟器 (QEMU) 开发架构。
 - **仓库地址**：`https://github.com/yuuichi33/OS` 目前是 private 状态，验收前会改成 public 状态。
 - **交付物**：可运行源代码 + 技术文档 + 演示文稿 + 视频 （对照课程评分标准）
 
@@ -103,7 +105,7 @@ xv6 是一个面向教学的 Unix 风格操作系统，其代码结构清晰、�
 
 本项目拟在保持 xv6 原有体系结构稳定性的前提下，逐步扩展其功能，实现课程设计要求的操作系统关键机制，并在此基础上引入部分现代 Unix/Linux 内核设计思想，提高系统的完整性与可扩展性。
 
-重点参考 `Linux` 和开源项目 `Re-XVapor (https://github.com/sandyyyz/Re-XVapor)` 以及 `MIT 6.S081`。
+重点参考 Linux 和开源项目 Re-XVapor `(https://github.com/sandyyyz/Re-XVapor)` 以及 MIT 6.S081。
 
 系统设计目标如下：
 - 熟悉 xv6-riscv 内核整体架构与启动流程；
@@ -235,53 +237,54 @@ graph TB
 
 - 单元测试：针对新增功能分别自行设计测试程序，精准验证单一模块功能的正确性。
 - 异常测试：构造非法内存访问和异常系统调用场景，验证系统异常隔离能力和资源回收能力。
-- 压力测试：利用 xv6 原生测试集 usertests，验证系统稳定性。
-- 集成测试：集成上述测试。
+- 系统测试：运行 xv6 原生测试集 usertests ，全面验证进程管理、内存管理、文件系统及系统调用等核心功能的正确性与兼容性。
+- 集成测试：实现统一测试框架 alltests.c，对新增功能测试、异常测试以及 xv6 原生 usertests 进行统一调度，实现一键式自动化测试。通过集成运行验证各模块之间的兼容性与协同工作能力，并检查系统整体稳定性。
 
 ### 2.6 开发过程中想到的其他内容
 
 - FCFS RR ( SJF NP-FP ) 
+- 增加图形化界面
 
 ## 三、任务清单及进度规划
 
 - 阶段一：基础环境与系统分析（Unchanged）
-  - 完成 QEMU、GCC 交叉工具链及 SSH 远程开发环境部署。
-  - xv6 架构与启动流程分析。
-  - 跑通 usertests 基准测试，建立 Baseline。
+  - [x] 完成 QEMU、GCC 交叉工具链及 SSH 远程开发环境部署。
+  - [x] xv6 架构与启动流程分析。
+  - [x] 跑通 usertests 基准测试，建立 Baseline。
 
 - 阶段二：系统调用、异常防护与动态内存（Foundation）
-  - 异常防护机制：在 usertrap 中拦截非法地址/指令，确保用户态崩溃不影响内核。
-  - kmalloc/kmfree：实现内核级字节动态分配器，为后续的信号量、定时器、线程等提供动态内存支持。
-  - 实现 getprocs 系统调用与用户态 ps 程序（先使用系统原生的静态进程表）。
+  - [x] 异常防护机制：在 usertrap 中拦截非法地址/指令，确保用户态崩溃不影响内核。
+  - [x] kmalloc/kmfree：实现内核级字节动态分配器，为后续的信号量、定时器、线程等提供动态内存支持。
+  - [x] 实现 getprocs 系统调用与用户态 ps 程序（先使用系统原生的静态进程表）。
 
 - 阶段三：核心进程管理、调度与同步（Core Process & Sync）
-  - FCFS 调度器：引入创建时间戳，实现非抢占 FCFS 与 RR 的动态切换。
-  - waitpid：扩展进程回收机制，支持回收指定子进程。
-  - Semaphore（信号量）：基于自旋锁与 sleep/wakeup 实现，由于有了 kmalloc，此时可以优雅地实现 sem_alloc/sem_free。
-  - Alarm 异步事件通知：基于时钟中断、Trapframe 现场保存与恢复实现定时通知。
+  - [x] FCFS 调度器：引入创建时间戳，实现非抢占 FCFS 与 RR 的动态切换。
+  - [x] waitpid：扩展进程回收机制，支持回收指定子进程。
+  - [x] Semaphore（信号量）：基于自旋锁与 sleep/wakeup 实现，由于有了 kmalloc，此时可以优雅地实现 sem_alloc/sem_free。
+  - [ ] Alarm 异步事件通知：基于时钟中断、Trapframe 现场保存与恢复实现定时通知。
 
 - 阶段四：文件系统增强（File System）
-  - lseek：实现文件指针定位，支持 SEEK_SET/CUR/END。
-  - Symlink（软链接）：实现符号链接节点，并在 namei 路径解析中引入递归解析与死循环防御。
+  - [ ] lseek：实现文件指针定位，支持 SEEK_SET/CUR/END。
+  - [ ] Symlink（软链接）：实现符号链接节点，并在 namei 路径解析中引入递归解析与死循环防御。
 
 - 阶段五：进阶虚拟内存管理（Advanced VM）
-  - Lazy Allocation（按需分页）：重构 sbrk，通过捕获 13/15 号缺页中断动态分配物理页。
-  - Copy-On-Write Fork（写时复制）：在 kalloc 中引入物理页引用计数，在 fork 时共享只读页表，写操作时触发缺页拷贝。
-  - mmap/munmap：引入虚拟内存区域（VMA）管理，实现文件与匿名的内存映射。
-  - Shared Memory（共享内存）：基于 VMA 和引用计数，实现多进程共享物理页。
+  - [ ] Lazy Allocation（按需分页）：重构 sbrk，通过捕获 13/15 号缺页中断动态分配物理页。
+  - [ ] Copy-On-Write Fork（写时复制）：在 kalloc 中引入物理页引用计数，在 fork 时共享只读页表，写操作时触发缺页拷贝。
+  - [ ] mmap/munmap：引入虚拟内存区域（VMA）管理，实现文件与匿名的内存映射。
+  - [ ] Shared Memory（共享内存）：基于 VMA 和引用计数，实现多进程共享物理页。
 
 - 阶段六：多线程机制与用户态同步（Threading & Futex）
-  - clone：利用阶段五建立起来的成熟页表管理机制，通过 uvmshare 共享物理地址空间，为轻量级线程创建独立的页表、Trapframe 和用户栈。
-  - Futex 和条件变量
+  - [ ] clone：利用阶段五建立起来的成熟页表管理机制，通过 uvmshare 共享物理地址空间，为轻量级线程创建独立的页表、Trapframe 和用户栈。
+  - [ ] Futex 和条件变量
   
 - 阶段七：系统信息与虚拟文件系统（Virtual FS）
-  - ProcFS 虚拟文件系统：实现动态虚拟 Inode 映射机制。
-  - System Information：实现 /proc/meminfo 和 /proc/[pid]/status，将阶段二的 getprocs 和阶段五的 VMA 状态以虚拟文件形式直观暴露。
+  - [ ] ProcFS 虚拟文件系统：实现动态虚拟 Inode 映射机制。
+  - [ ] System Information：实现 /proc/meminfo 和 /proc/[pid]/status，将阶段二的 getprocs 和阶段五的 VMA 状态以虚拟文件形式直观暴露。
 
 - 阶段八：测试与全量验证（Testing）
-  - 模块单元测试
-  - 集成测试与原生 usertests 压力测试
-  - 一键自动化测试框架 alltests 跑通
+  - [ ] 模块单元测试
+  - [ ] 集成测试与原生 usertests 压力测试
+  - [ ] 一键自动化测试框架 alltests 跑通
   
 ## 四、具体完成工作
 
@@ -292,7 +295,8 @@ graph TB
 - 新建并切换至独立开发分支 dev，强制回滚至 2022 年底稳定提交 74c1eba，避开后续版本对 QEMU >= 7.2 的编译限制，确保兼容性。
 - 通过 make qemu 成功编译并启动系统。
 - 在模拟器中全量跑通内核测试集 usertests，测试结果为 ALL TESTS PASSED。
-![alt text](figs/fig1.png)
+<center><img src="figs/fig1.png" width="50%"></center>
+
 
 ### 4.2 系统调用、异常防护与动态内存
 - [分析](devlog/phase2.md) `(devlog/phase2.md)`
@@ -314,7 +318,7 @@ graph TB
   - 在 kmfree 中实现了物理连续空闲块的自动检测与合并，有效防止了内存碎片的产生。
   - 使用独立的自旋锁保护分配链表，保证了多 CPU 并发分配下的数据安全。
   - 编写 kmalloctest.c 单元测试，并将其接入 alltests 集成测试框架，测试顺利通过（`PASS: 6/6`）。
-![alt text](figs/fig2.png)
+<center><img src="figs/fig2.png" width="50%"></center>
 
 ### 4.3 核心进程管理、调度与同步
 - [分析](devlog/phase3.md) `(devlog/phase3.md)`
@@ -324,8 +328,15 @@ graph TB
   - 修改 trap.c 实现非抢占的 FCFS。
   - 新增 sched_switch 系统调用和 sche` 命令，支持切换调度模式。
   - 编写 schedtest 并接入 alltests。FCFS 模式下子进程完全顺序执行；RR 模式下子进程交替并发（打印交错）。测试结果全量通过（`PASS: 10/10`）。
-  ![alt text](figs/fig3.png)
-- waitpid
+  <center><img src="figs/fig3.png" width="50%"></center>
+
+- waitpid 机制
+  - 若传入 pid > 0，内核仅查找、回收 PID 匹配的特定子进程；若传入 pid == -1，则兼容普通 wait，回收任意子进程。
+  - 非阻塞支持：支持首部选项 WNOHANG（值为 1）。当指定该选项且目标子进程尚未退出时，内核立即返回 0，避免了父进程无意义的挂起等待。
+  - 编写 waitpidtest.c，将其接入 alltests 测试框架，通过全部 11 项测试（`PASS: 11/11`）。
+  <center><img src="figs/fig4.png" width="50%"></center>
+ 
+- Semaphore（信号量）
 
 ## 参考资料
 
@@ -338,3 +349,5 @@ graph TB
 - https://github.com/mit-pdos/xv6-riscv-fall19
 - https://github.com/torvalds/linux
 - https://pdos.csail.mit.edu/6.S081
+
+<!-- </div> -->

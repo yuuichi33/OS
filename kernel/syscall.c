@@ -104,6 +104,7 @@ extern uint64 sys_close(void);
 extern uint64 sys_getprocs(void);
 extern uint64 sys_kmalloctest(void);
 extern uint64 sys_sched_switch(void);
+extern uint64 sys_waitpid(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -132,6 +133,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_getprocs]   sys_getprocs,
 [SYS_kmalloctest] sys_kmalloctest,
 [SYS_sched_switch] sys_sched_switch,
+[SYS_waitpid] sys_waitpid,
 };
 
 void

@@ -39,3 +39,4 @@ entry("uptime");
 entry("getprocs");
 entry("kmalloctest");
 entry("sched_switch");
+entry("waitpid");

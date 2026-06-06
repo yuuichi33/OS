@@ -155,3 +155,18 @@ sys_sched_switch(void)
   }
   return -1;
 }
+
+uint64
+sys_waitpid(void)
+{
+  int pid;
+  uint64 addr;
+  int options;
+
+  argint(0, &pid);
+  argaddr(1, &addr);
+  argint(2, &options);
+
+  extern int waitpid(int, uint64, int);
+  return waitpid(pid, addr, options);
+}
