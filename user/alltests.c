@@ -24,7 +24,8 @@ struct test_case tests[] = {
   { "Sched: RR scheduling", "schedtest", {"schedtest", 0}, 0 },
   { "Process: waitpid mechanism", "waitpidtest", {"waitpidtest", 0}, 0 },
   { "Process: Semaphore mechanism", "semtest",  {"semtest", 0}, 0 },
-  // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
+  // usertests
+  { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };
 
 void run_test(struct test_case *tc) {
