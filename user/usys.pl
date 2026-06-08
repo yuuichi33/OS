@@ -46,3 +46,4 @@ entry("sem_wait");
 entry("sem_signal");
 entry("sigalarm");
 entry("sigreturn");
+entry("lseek");

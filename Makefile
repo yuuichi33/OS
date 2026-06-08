@@ -142,6 +142,7 @@ UPROGS=\
 	$U/_waitpidtest\
 	$U/_semtest\
 	$U/_alarmtest\
+	$U/_lseektest\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)

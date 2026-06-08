@@ -1,0 +1,12 @@
+### lseek 
+- 操作系统在 struct file 中使用 off 字段记录当前文件的读写位置（偏移量）。默认的 read 和 write 会自动递增这个值。
+- lseek(fd, offset, whence) 系统调用的目的，就是强行修改这个 off 偏移量，从而实现文件任意位置的随机读写。
+- whence 参数控制流设计：
+  - SEEK_SET (0)：新偏移量设为 offset（绝对定位）。
+  - SEEK_CUR (1)：新偏移量设为 当前 off + offset（相对当前位置定位）。
+  - SEEK_END (2)：新偏移量设为 文件大小 size + offset（相对文件末尾定位）。需要通过 ilock(ip) 锁住索引节点，以安全读取 ip->size。
+- 异常边界防御：
+  - 必须拦截非法文件描述符（fd）。
+  - 必须拦截非正规文件（管道 FD_PIPE、控制台 FD_DEVICE 均不支持 lseek，应返回 -1）。
+  - 必须拦截非法的 whence 参数。
+  - 必须拦截计算后小于 0 的非法偏移量（偏移量不允许为负数，返回 -1）。

@@ -503,3 +503,49 @@ sys_pipe(void)
   }
   return 0;
 }
+
+// lseek
+uint64
+sys_lseek(void)
+{
+  struct file *f;
+  int offset;
+  int whence;
+
+  // 获取用户态参数：offset 和 whence
+  argint(1, &offset);
+  argint(2, &whence);
+  if(argfd(0, 0, &f) < 0)
+    return -1;
+
+  // 异常拦截：lseek 只支持普通磁盘文件 (FD_INODE)
+  if(f->type != FD_INODE)
+    return -1;
+
+  struct inode *ip = f->ip;
+  int new_off = f->off;
+
+  ilock(ip); // 锁住 inode，确保读取 size 且修改 off 的并发安全
+
+  if(whence == 0) {        // SEEK_SET (绝对定位)
+    new_off = offset;
+  } else if(whence == 1) { // SEEK_CUR (相对当前位置)
+    new_off = f->off + offset;
+  } else if(whence == 2) { // SEEK_END (相对文件尾)
+    new_off = ip->size + offset;
+  } else {
+    iunlock(ip);
+    return -1; // 非法 whence
+  }
+
+  // 异常拦截：偏移量不能为负数
+  if(new_off < 0) {
+    iunlock(ip);
+    return -1;
+  }
+
+  f->off = new_off; // 写入新偏移量
+  iunlock(ip);
+
+  return new_off; // 返回定位后的新偏移量
+}

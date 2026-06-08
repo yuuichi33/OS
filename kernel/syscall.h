@@ -20,6 +20,7 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
+// 
 #define SYS_getprocs 22
 #define SYS_kmalloctest 23
 #define SYS_sched_switch 24
@@ -30,3 +31,4 @@
 #define SYS_sem_signal 29
 #define SYS_sigalarm  30
 #define SYS_sigreturn 31
+#define SYS_lseek 32

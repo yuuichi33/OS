@@ -356,6 +356,16 @@ graph TB
   - 采用官方的 alarmtest.c，集成进统一测试框架，成功通过实验（`PASS: 13/13`）。
   <center><img src="figs/fig6.png" width="50%"></center>
 
+### 4.4 文件系统增强
+- [分析](devlog/phase4.md) `(devlog/phase4.md)`
+
+- lseek
+  - 实现 sys_lseek，支持 SEEK_SET、SEEK_CUR、SEEK_END 三种标准定位模式。
+  - 引入 inode 级别的睡眠锁保护，确保多核/多进程并发访问时，文件大小 size 读取和偏移量 off 改写具有强一致性。
+  - 建立边界异常防御，成功拦截并过滤非法文件描述符（fd）、非 Regular 文件类型（管道/控制台设备）以及越界负数偏移。
+  - 编写 lseektest.c 并成功接入集成测试框架，全量通过 14 项测试（`PASS: 14/14`）。
+  <center><img src="figs/fig7.png" width="50%"></center>
+
 ## 参考资料（部分）
 
 - https://github.com/mit-pdos/xv6-riscv

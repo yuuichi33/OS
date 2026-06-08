@@ -57,7 +57,10 @@
 - 目标：如果一个时钟警报处理程序（如 slow_handler）由于执行太慢，跨越了多个时钟滴答，在此期间绝对不能重复触发新的警报。
 - 机制：引入 alarm_running 标志。当该标志为 1 时，时钟中断处的累加和触发逻辑直接被屏蔽，直到 sigreturn 将其复位。
 
+### lseektest.c
 
+- 异常分支测试：测试非法 fd、测试非 Regular 文件（如 stdin）、测试非法 whence、测试计算后为负数的偏移量。
+- 功能分支测试：分别精确写入、定位、并读取校对 SEEK_SET、SEEK_CUR 和 SEEK_END 三种定位效果。
 
 ### usertests.c ( xv6 官方测试集)
 

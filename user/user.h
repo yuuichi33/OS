@@ -40,7 +40,10 @@ int sem_wait(uint64);
 int sem_signal(uint64);
 int sigalarm(int, void (*)());
 int sigreturn(void);
-
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+int lseek(int, int, int);
 
 // ulib.c
 int stat(const char*, struct stat*);
