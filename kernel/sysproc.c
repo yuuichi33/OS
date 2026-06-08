@@ -206,3 +206,33 @@ sys_sem_signal(void)
   extern int sem_signal(uint64);
   return sem_signal(sem_addr);
 }
+
+uint64
+sys_sigalarm(void)
+{
+  int interval;
+  uint64 handler;
+  struct proc *p = myproc();
+
+  argint(0, &interval);
+  argaddr(1, &handler);
+
+  p->alarm_interval = interval;
+  p->alarm_handler = handler;
+  p->alarm_ticks = 0;
+
+  return 0;
+}
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  
+  // 恢复之前备份的所有通用寄存器
+  *p->trapframe = *p->alarm_tf;
+  p->alarm_running = 0;
+
+  // 必须返回恢复后现场的 a0 寄存器值，否则内核系统调用分发框架会用 0 覆盖用户态的 a0，导致 test1 变量损坏。
+  return p->trapframe->a0;
+}

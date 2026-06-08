@@ -67,6 +67,18 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+    // alarm
+    if(which_dev == 2 && p->alarm_interval > 0 && p->alarm_running == 0) {
+      p->alarm_ticks++;
+      if(p->alarm_ticks == p->alarm_interval) {
+        p->alarm_ticks = 0;
+        p->alarm_running = 1;
+        // 备份当前所有的用户寄存器现场
+        *p->alarm_tf = *p->trapframe;
+        // 重定向用户程序返回地址至 handler
+        p->trapframe->epc = p->alarm_handler;
+      }
+    }
   } else {
     // 细化拦截并处理用户态异常，确保内核稳定
     uint64 scause = r_scause();

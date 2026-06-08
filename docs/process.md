@@ -235,7 +235,7 @@ graph TB
 
 ### 2.5 测试方案
 
-- 单元测试：针对新增功能分别自行设计测试程序，精准验证单一模块功能的正确性。
+- 单元测试：针对新增功能分别自行设计测试程序或引入官方测试文件，精准验证单一模块功能的正确性。
 - 异常测试：构造非法内存访问和异常系统调用场景，验证系统异常隔离能力和资源回收能力。
 - 系统测试：运行 xv6 原生测试集 usertests ，全面验证进程管理、内存管理、文件系统及系统调用等核心功能的正确性与兼容性。
 - 集成测试：实现统一测试框架 alltests.c，对新增功能测试、异常测试以及 xv6 原生 usertests 进行统一调度，实现一键式自动化测试。通过集成运行验证各模块之间的兼容性与协同工作能力，并检查系统整体稳定性。
@@ -244,9 +244,10 @@ graph TB
 
 ### 2.6 开发过程中想到的其他内容
 
-- 堆内存管理目前采用First-Fit 空闲链表方法，还有更复杂的 Buddy System 和 Slab Allocator方法
+- 堆内存管理目前采用 First-Fit 空闲链表方法，还有更复杂的 Buddy System 和 Slab Allocator方法
 - 进程调度算法 FCFS RR (还有 SPF NP-FP 等 ) 
 - 增加图形化界面
+- 优化完善 libc， 测试指标 量化优化结果
 
 ## 三、任务清单及进度规划
 
@@ -264,7 +265,7 @@ graph TB
   - [x] FCFS 调度器：引入创建时间戳，实现非抢占 FCFS 与 RR 的动态切换。
   - [x] waitpid：扩展进程回收机制，支持回收指定子进程。
   - [x] Semaphore（信号量）：基于自旋锁与 sleep/wakeup 实现，由于有了 kmalloc，此时可以实现 sem_alloc/sem_free。
-  - [ ] Alarm 异步事件通知：基于时钟中断、Trapframe 现场保存与恢复实现定时通知。
+  - [x] Alarm 异步事件通知：基于时钟中断、Trapframe 现场保存与恢复实现定时通知。
 
 - 阶段四：文件系统增强（File System）
   - [ ] lseek：实现文件指针定位，支持 SEEK_SET/CUR/END。
@@ -345,8 +346,17 @@ graph TB
   - 编写 semtest.c，覆盖非法句柄防御、非阻塞 P/V、阻塞式同步（sleep/wakeup）、以及 50 次循环分配与释放的内核堆内存泄漏（Stress）测试，将其接入测试框架 alltests，全量测试顺利通过（`PASS: 12/12`）。
   <center><img src="figs/fig5.png" width="50%"></center>
 
+- Alarm: 基于硬件时钟中断的用户态异步定时器（sigalarm / sigreturn）机制
+  - 时钟中断拦截与重定向
+    - 在进程创建时，利用 kmalloc 在内核堆中动态分配现场备份页 alarm_tf。
+    - 时钟中断触发时累加滴答数，到期时将当前 trapframe 完整拷贝备份，并将用户态返回地址 epc 强行重定向至警报处理函数。
+  - 现场恢复与防重入机制
+    - a0 寄存器保护：在 sys_sigreturn 中，恢复备份现场的同时强制返回 p->trapframe->a0。
+    - 重入锁保护：引入 alarm_running 标志位。当进程正在执行警报处理函数时，屏蔽新的时钟触发，避免自重入嵌套导致的栈溢出崩溃。
+  - 采用官方的 alarmtest.c，集成进统一测试框架，成功通过实验（`PASS: 13/13`）。
+  <center><img src="figs/fig6.png" width="50%"></center>
 
-## 参考资料
+## 参考资料（部分）
 
 - https://github.com/mit-pdos/xv6-riscv
 - https://github.com/mit-pdos/xv6-riscv-book/
@@ -357,5 +367,6 @@ graph TB
 - https://github.com/mit-pdos/xv6-riscv-fall19
 - https://github.com/torvalds/linux
 - https://pdos.csail.mit.edu/6.S081
+- https://linux-kernel-labs.github.io/
 
 <!-- </div> -->

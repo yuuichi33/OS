@@ -105,4 +105,11 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   uint ctime;  // phase3 ctime
+
+  // alarm
+  int alarm_interval;          // 警报触发间隔（0表示关闭）
+  uint64 alarm_handler;        // 用户态警报处理函数指针
+  int alarm_ticks;             // 累计时钟滴答数
+  struct trapframe *alarm_tf;  // 动态申请的备份现场（使用 kmalloc）
+  int alarm_running;           // 防重入锁（1：正在运行，0：未运行）
 };

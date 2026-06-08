@@ -28,3 +28,5 @@
 #define SYS_sem_free   27
 #define SYS_sem_wait   28
 #define SYS_sem_signal 29
+#define SYS_sigalarm  30
+#define SYS_sigreturn 31

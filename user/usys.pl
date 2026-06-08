@@ -44,3 +44,5 @@ entry("sem_alloc");
 entry("sem_free");
 entry("sem_wait");
 entry("sem_signal");
+entry("sigalarm");
+entry("sigreturn");

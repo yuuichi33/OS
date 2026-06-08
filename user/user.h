@@ -38,6 +38,8 @@ uint64 sem_alloc(int);
 int sem_free(uint64);
 int sem_wait(uint64);
 int sem_signal(uint64);
+int sigalarm(int, void (*)());
+int sigreturn(void);
 
 
 // ulib.c

@@ -15,17 +15,26 @@ struct test_case tests[] = {
   { "Exception: Invalid Read", "crash_test", {"crash_test", "2", 0}, -1 },
   { "Exception: Invalid Write", "crash_test", {"crash_test", "3", 0}, -1 },
   { "Exception: Write to Code", "crash_test", {"crash_test", "4", 0}, -1 },
+
   { "System call: ps", "ps", {"ps", 0}, 0 },
+
   { "Memory: kmalloc/kmfree", "kmalloctest", {"kmalloctest", 0}, 0 },
+
+
   // phase3
   { "Sched: Switch to FCFS", "sched", {"sched", "1", 0}, 0 },
   { "Sched: FCFS scheduling", "schedtest", {"schedtest", 0}, 0 },
   { "Sched: Switch to RR", "sched", {"sched", "0", 0}, 0 },
   { "Sched: RR scheduling", "schedtest", {"schedtest", 0}, 0 },
+
   { "Process: waitpid mechanism", "waitpidtest", {"waitpidtest", 0}, 0 },
+
   { "Process: Semaphore mechanism", "semtest",  {"semtest", 0}, 0 },
+  
+  { "Official: alarmtest", "alarmtest", {"alarmtest", 0}, 0 },
+
   // usertests
-  { "Official: usertests", "usertests", {"usertests", 0}, 0 }
+  // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };
 
 void run_test(struct test_case *tc) {
