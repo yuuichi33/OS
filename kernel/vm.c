@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"  
+#include "proc.h"      
 
 /*
  * the kernel's page table.
@@ -115,10 +117,25 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
 
   pte = walk(pagetable, va, 0);
-  if(pte == 0)
+  
+  // 如果页表未建立或 PTE 无效，在此处进行内核态按需分配
+  if(pte == 0 || (*pte & PTE_V) == 0) {
+    struct proc *p = myproc();
+    // 地址必须合法（小于 sz）
+    if(p != 0 && va < p->sz) {
+      char *mem = kalloc();
+      if(mem == 0)
+        return 0; // 物理内存耗尽
+      memset(mem, 0, PGSIZE);
+      if(mappages(pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U) < 0) {
+        kfree(mem);
+        return 0;
+      }
+      return (uint64)mem;
+    }
     return 0;
-  if((*pte & PTE_V) == 0)
-    return 0;
+  }
+  
   if((*pte & PTE_U) == 0)
     return 0;
   pa = PTE2PA(*pte);
@@ -185,9 +202,11 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
+      // panic("uvmunmap: walk");
+      continue;
     if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+      // panic("uvmunmap: not mapped");
+      continue;
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -319,9 +338,11 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+      // panic("uvmcopy: pte should exist");
+      continue;
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      // panic("uvmcopy: page not present");
+      continue;
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -366,6 +387,24 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     if(va0 >= MAXVA)
       return -1;
     pte = walk(pagetable, va0, 0);
+
+    if(pte == 0 || (*pte & PTE_V) == 0) {
+      struct proc *p = myproc();
+      if(p != 0 && va0 < p->sz) {
+        char *mem = kalloc();
+        if(mem == 0)
+          return -1;
+        memset(mem, 0, PGSIZE);
+        if(mappages(pagetable, va0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U) < 0) {
+          kfree(mem);
+          return -1;
+        }
+        pte = walk(pagetable, va0, 0); // 重新获取已成功映射的 pte
+      } else {
+        return -1;
+      }
+    }
+    
     if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 ||
        (*pte & PTE_W) == 0)
       return -1;

@@ -272,7 +272,7 @@ graph TB
   - [x] Symlink（软链接）：实现符号链接节点，并在 namei 路径解析中引入递归解析与死循环防御。
 
 - 阶段五：进阶虚拟内存管理（Advanced VM）
-  - [ ] Lazy Allocation（按需分页）：重构 sbrk，通过捕获 13/15 号缺页中断动态分配物理页。
+  - [x] Lazy Allocation（按需分页）：重构 sbrk，通过捕获 13/15 号缺页中断动态分配物理页。
   - [ ] Copy-On-Write Fork（写时复制）：在 kalloc 中引入物理页引用计数，在 fork 时共享只读页表，写操作时触发缺页拷贝。
   - [ ] mmap/munmap：引入虚拟内存区域（VMA）管理，实现文件与匿名的内存映射。
   - [ ] Shared Memory（共享内存）：基于 VMA 和引用计数，实现多进程共享物理页。
@@ -372,6 +372,18 @@ graph TB
   - 成功通过官方包含基础重定向、断头链接、环路自动熔断、多级链条追踪以及多核高并发读写竞争测试（`PASS: 15/15`）。
   <center><img src="figs/fig8.png" width="50%"></center>
 
+### 4.5 进阶虚拟内存管理
+- [分析](devlog/phase5.md) `(devlog/phase5.md)`
+
+- 按需分页 lazy allocation
+  - 修改 sys_sbrk。当进程申请增加堆内存时，仅抬高虚拟地址边界 `p->sz`，不实际分配物理页、不修改页表。在缩减内存时，依然立刻释放物理页。
+  - 在 usertrap() 中拦截读缺页（scause 13）与写缺页（scause 15）异常。当地址处于 `[0, p->sz)` 合法堆区间内时，通过 kalloc 动态申请物理页并通过 mappages 补齐映射。
+  - 重构 walkaddr() 和 copyout()。当用户进程将尚未映射的 Lazy 内存指针传给 read/write 等系统调用时，内核在执行虚拟地址转换时能自动透明地为其补齐分配物理页。
+  - 修改 uvmunmap 与 uvmcopy，使其在执行页表释放或 fork 拷贝时，遇到尚未分配物理页的 Lazy 页面时直接 continue，不再 Panic。
+  - 修复官方 lazytests 退出码硬编码为 1 的问题，集成测试全部通过（`PASS: 16/16`）。
+  <center><img src="figs/fig9.png" width="50%"></center>
+
+  
 ## 参考资料（部分）
 
 - https://github.com/mit-pdos/xv6-riscv
@@ -384,5 +396,6 @@ graph TB
 - https://github.com/torvalds/linux
 - https://pdos.csail.mit.edu/6.S081
 - https://linux-kernel-labs.github.io/
+- https://pdos.csail.mit.edu/6.S081/2020/labs/lazy.html
 
 <!-- </div> -->

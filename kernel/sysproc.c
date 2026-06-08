@@ -40,11 +40,21 @@ sys_sbrk(void)
 {
   uint64 addr;
   int n;
+  struct proc *p = myproc();
 
   argint(0, &n);
-  addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
+  addr = p->sz;
+
+  if(n < 0) {
+    // 内存缩减：必须立即调用 growproc 释放物理页
+    if(growproc(n) < 0)
+      return -1;
+  } else {
+    // 延迟分配：只向上增长虚拟边界 sz，不分配物理页
+    if(p->sz + n >= MAXVA || p->sz + n < p->sz)
+      return -1;
+    p->sz += n;
+  }
   return addr;
 }
 

@@ -28,6 +28,9 @@ struct test_case tests[] = {
   // phase4
   { "File: lseek random access", "lseektest", {"lseektest", 0}, 0 },
   { "File: Symlink mechanism", "symlinktest", {"symlinktest", 0}, 0 },
+  // phase5
+  { "Memory: lazy page allocation", "lazytests", {"lazytests", 0}, 0 },
+
   // usertests
   // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };

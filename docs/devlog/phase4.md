@@ -12,6 +12,9 @@
   - 必须拦截计算后小于 0 的非法偏移量（偏移量不允许为负数，返回 -1）。
 
 ### Symbolic Link
+
+- 参考：https://pdos.csail.mit.edu/6.S081/2025/labs/fs.html
+
 - 一个特殊类型的文件（类型标记为 T_SYMLINK）。
 - 数据块（Data Blocks）中存储的是另一个文件的目标路径名（Target Path）。
 - 动态递归解析算法：

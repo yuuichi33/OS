@@ -84,34 +84,62 @@ usertrap(void)
     uint64 scause = r_scause();
     uint64 stval = r_stval(); // 发生异常的地址
     uint64 sepc = r_sepc();   // 发生异常的指令地址
-
-    switch (scause) {
-      case 2: // 非法指令 (Illegal Instruction)
-        printf("\n[Kernel Exception] Process %d (%s) killed due to: Illegal Instruction\n", p->pid, p->name);
-        printf("                   at PC: %p, Instruction: %p\n", sepc, stval);
-        break;
-      case 13: // 读段错误 (Load Page Fault / Segmentation fault)
-        printf("\n[Kernel Exception] Process %d (%s) killed due to: Segmentation Fault (Invalid Read)\n", p->pid, p->name);
-        printf("                   at PC: %p, Accessing Address: %p\n", sepc, stval);
-        break;
-      case 15: // 写段错误 (Store Page Fault / Segmentation fault)
-        printf("\n[Kernel Exception] Process %d (%s) killed due to: Segmentation Fault (Invalid Write)\n", p->pid, p->name);
-        printf("                   at PC: %p, Accessing Address: %p\n", sepc, stval);
-        break;
-      case 12: // 执行段错误 (Instruction Page Fault)
-        printf("\n[Kernel Exception] Process %d (%s) killed due to: Instruction Page Fault (Execution Denied)\n", p->pid, p->name);
-        printf("                   at PC: %p\n", sepc);
-        break;
-      default: // 其他未细化的异常
-        printf("\n[Kernel Exception] Process %d (%s) killed due to: Unknown Exception (scause %p)\n", p->pid, p->name, scause);
-        printf("                   at PC: %p, stval: %p\n", sepc, stval);
-        break;
-    }
+    // 处理用户态触发的按需缺页异常
+    if(scause == 13 || scause == 15) {
+      // 异常地址必须处于进程合法的堆空间 [0, p->sz)
+      if(stval < p->sz) {
+        uint64 va0 = PGROUNDDOWN(stval);
+        
+        // 如果地址已经映射了，却还报缺页（说明是只读页面写保护异常，拒绝非法修改）
+        pte_t *pte = walk(p->pagetable, va0, 0);
+        if(pte == 0 || (*pte & PTE_V) == 0) {
+          char *mem = kalloc();
+          if(mem == 0) {
+            // 物理内存耗尽，Kill 进程
+            setkilled(p);
+          } else {
+            memset(mem, 0, PGSIZE);
+            if(mappages(p->pagetable, va0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U) < 0) {
+              kfree(mem);
+              setkilled(p);
+            }
+          }
+        } else {
+          // 只读写保护异常，Kill
+          setkilled(p);
+        }
+      } else {
+        // 真正的内存越界访问（Segment Fault），Kill
+        setkilled(p);
+      }
+    } else {
+      switch (scause) {
+        case 2: // 非法指令 (Illegal Instruction)
+          printf("\n[Kernel Exception] Process %d (%s) killed due to: Illegal Instruction\n", p->pid, p->name);
+          printf("                   at PC: %p, Instruction: %p\n", sepc, stval);
+          break;
+        case 13: // 读段错误 (Load Page Fault / Segmentation fault)
+          printf("\n[Kernel Exception] Process %d (%s) killed due to: Segmentation Fault (Invalid Read)\n", p->pid, p->name);
+          printf("                   at PC: %p, Accessing Address: %p\n", sepc, stval);
+          break;
+        case 15: // 写段错误 (Store Page Fault / Segmentation fault)
+          printf("\n[Kernel Exception] Process %d (%s) killed due to: Segmentation Fault (Invalid Write)\n", p->pid, p->name);
+          printf("                   at PC: %p, Accessing Address: %p\n", sepc, stval);
+          break;
+        case 12: // 执行段错误 (Instruction Page Fault)
+          printf("\n[Kernel Exception] Process %d (%s) killed due to: Instruction Page Fault (Execution Denied)\n", p->pid, p->name);
+          printf("                   at PC: %p\n", sepc);
+          break;
+        default: // 其他未细化的异常
+          printf("\n[Kernel Exception] Process %d (%s) killed due to: Unknown Exception (scause %p)\n", p->pid, p->name, scause);
+          printf("                   at PC: %p, stval: %p\n", sepc, stval);
+          break;
+      }
     
-    // 标记进程被杀死，退出码为 -1
-    setkilled(p);
+      // 标记进程被杀死，退出码为 -1
+      setkilled(p);
+    }
   }
-
   if(killed(p))
     exit(-1);
 
