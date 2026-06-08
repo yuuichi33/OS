@@ -32,3 +32,4 @@
 #define SYS_sigalarm  30
 #define SYS_sigreturn 31
 #define SYS_lseek 32
+#define SYS_symlink 33

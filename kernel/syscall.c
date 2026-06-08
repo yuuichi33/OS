@@ -112,6 +112,7 @@ extern uint64 sys_sem_signal(void);
 extern uint64 sys_sigalarm(void);
 extern uint64 sys_sigreturn(void);
 extern uint64 sys_lseek(void);
+extern uint64 sys_symlink(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -147,7 +148,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_sem_signal]  sys_sem_signal,
 [SYS_sigalarm]    sys_sigalarm,
 [SYS_sigreturn]   sys_sigreturn,
-[SYS_lseek] sys_lseek,
+[SYS_lseek]    sys_lseek,
+[SYS_symlink]    sys_symlink,
 };
 
 void

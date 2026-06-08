@@ -44,6 +44,8 @@ int sigreturn(void);
 #define SEEK_CUR 1
 #define SEEK_END 2
 int lseek(int, int, int);
+#define O_NOFOLLOW 0x800
+int symlink(const char*, const char*);
 
 // ulib.c
 int stat(const char*, struct stat*);

@@ -268,8 +268,8 @@ graph TB
   - [x] Alarm 异步事件通知：基于时钟中断、Trapframe 现场保存与恢复实现定时通知。
 
 - 阶段四：文件系统增强（File System）
-  - [ ] lseek：实现文件指针定位，支持 SEEK_SET/CUR/END。
-  - [ ] Symlink（软链接）：实现符号链接节点，并在 namei 路径解析中引入递归解析与死循环防御。
+  - [x] lseek：实现文件指针定位，支持 SEEK_SET/CUR/END。
+  - [x] Symlink（软链接）：实现符号链接节点，并在 namei 路径解析中引入递归解析与死循环防御。
 
 - 阶段五：进阶虚拟内存管理（Advanced VM）
   - [ ] Lazy Allocation（按需分页）：重构 sbrk，通过捕获 13/15 号缺页中断动态分配物理页。
@@ -365,6 +365,12 @@ graph TB
   - 建立边界异常防御，成功拦截并过滤非法文件描述符（fd）、非 Regular 文件类型（管道/控制台设备）以及越界负数偏移。
   - 编写 lseektest.c 并成功接入集成测试框架，全量通过 14 项测试（`PASS: 14/14`）。
   <center><img src="figs/fig7.png" width="50%"></center>
+
+- Symlink（软链接）
+  - 定义软链接文件类型 T_SYMLINK（值为 4），实现 sys_symlink 系统调用，将链接目标路径通过 writei 动态存入软链接 Inode 的数据块中。
+  - 重构 sys_open。当打开软链接且未指定 O_NOFOLLOW 时，内核通过 readi 递归读取目标路径并解析。设定最大递归深度为 10，防御环路软链接导致的内核死锁。
+  - 成功通过官方包含基础重定向、断头链接、环路自动熔断、多级链条追踪以及多核高并发读写竞争测试（`PASS: 15/15`）。
+  <center><img src="figs/fig8.png" width="50%"></center>
 
 ## 参考资料（部分）
 

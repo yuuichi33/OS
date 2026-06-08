@@ -24,9 +24,10 @@ struct test_case tests[] = {
   { "Sched: RR scheduling", "schedtest", {"schedtest", 0}, 0 },
   { "Process: waitpid mechanism", "waitpidtest", {"waitpidtest", 0}, 0 },
   { "Process: Semaphore mechanism", "semtest",  {"semtest", 0}, 0 },
-  { "Official: alarmtest", "alarmtest", {"alarmtest", 0}, 0 },
+  { "Alarm: alarmtest", "alarmtest", {"alarmtest", 0}, 0 },
   // phase4
   { "File: lseek random access", "lseektest", {"lseektest", 0}, 0 },
+  { "File: Symlink mechanism", "symlinktest", {"symlinktest", 0}, 0 },
   // usertests
   // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };

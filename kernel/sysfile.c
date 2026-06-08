@@ -334,7 +334,36 @@ sys_open(void)
       return -1;
     }
   }
+  // T_SYMLINK 软链接递归解析
+  int depth = 0;
+  while(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){
+    if(depth >= 10){ // 如果递归深度超过 10，说明形成环路，报错返回
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+    depth++;
 
+    char target_path[MAXPATH];
+    memset(target_path, 0, MAXPATH);
+    // 从当前软链接的数据块中读出它指向的目标路径
+    if(readi(ip, 0, (uint64)target_path, 0, ip->size) != ip->size) {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
+    // 释放当前的软链接节点
+    iunlockput(ip);
+
+    // 寻找到目标文件节点
+    if((ip = namei(target_path)) == 0) {
+      end_op();
+      return -1; // 目标文件不存在（断头链接），打开失败
+    }
+    ilock(ip);
+  }
+  
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
@@ -548,4 +577,37 @@ sys_lseek(void)
   iunlock(ip);
 
   return new_off; // 返回定位后的新偏移量
+}
+
+// 创建软链接系统调用
+uint64
+sys_symlink(void)
+{
+  char target[MAXPATH], path[MAXPATH];
+  struct inode *ip;
+
+  // 获取用户态传入的目标路径 (target) 和 软链接自身的路径 (path)
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+  // 创建一个 T_SYMLINK 类型的 inode 节点
+  ip = create(path, T_SYMLINK, 0, 0);
+  if(ip == 0){
+    end_op();
+    return -1;
+  }
+
+  // 将目标路径写入该 Inode 的数据块中
+  if(writei(ip, 0, (uint64)target, 0, strlen(target)) != strlen(target)) {
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+
+  iupdate(ip);
+  iunlockput(ip);
+  end_op();
+
+  return 0;
 }

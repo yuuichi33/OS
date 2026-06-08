@@ -143,6 +143,7 @@ UPROGS=\
 	$U/_semtest\
 	$U/_alarmtest\
 	$U/_lseektest\
+	$U/_symlinktest\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)
