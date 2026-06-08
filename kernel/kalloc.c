@@ -9,6 +9,12 @@
 #include "riscv.h"
 #include "defs.h"
 
+struct {
+  struct spinlock lock;
+  char counts[PHYSTOP / PGSIZE]; // 引用计数数组，最大物理内存为 PHYSTOP (224MB)
+} page_ref;
+
+
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -27,6 +33,7 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&page_ref.lock, "pageref"); 
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -50,6 +57,16 @@ kfree(void *pa)
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+  
+  // 判断引用计数。如果 > 1 则递减并直接返回（不真正释放）
+  acquire(&page_ref.lock);
+  if(page_ref.counts[(uint64)pa / PGSIZE] > 1) {
+    page_ref.counts[(uint64)pa / PGSIZE]--;
+    release(&page_ref.lock);
+    return;
+  }
+  page_ref.counts[(uint64)pa / PGSIZE] = 0;
+  release(&page_ref.lock);
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -76,8 +93,14 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r){
+    // 分配物理页时引用计数为1
+    acquire(&page_ref.lock);
+    page_ref.counts[(uint64)r / PGSIZE] = 1;
+    release(&page_ref.lock);
+
     memset((char*)r, 5, PGSIZE); // fill with junk
+  }
   return (void*)r;
 }
 
@@ -240,4 +263,40 @@ kmalloctest_run(void)
 
   printf("kmalloc test: all branches passed!\n");
   return 0;
+}
+
+// cow fork
+// 增加物理页的引用计数
+void
+ref_inc(uint64 pa)
+{
+  if(pa < (uint64)end || pa >= PHYSTOP)
+    return;
+  acquire(&page_ref.lock);
+  page_ref.counts[pa / PGSIZE]++;
+  release(&page_ref.lock);
+}
+
+// 减少并获取物理页引用计数
+void
+ref_dec(uint64 pa)
+{
+  if(pa < (uint64)end || pa >= PHYSTOP)
+    return;
+  acquire(&page_ref.lock);
+  page_ref.counts[pa / PGSIZE]--;
+  release(&page_ref.lock);
+}
+
+// 获取当前的引用计数
+int
+ref_get(uint64 pa)
+{
+  if(pa < (uint64)end || pa >= PHYSTOP)
+    return 0;
+  int c;
+  acquire(&page_ref.lock);
+  c = page_ref.counts[pa / PGSIZE];
+  release(&page_ref.lock);
+  return c;
 }

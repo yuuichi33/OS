@@ -334,7 +334,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  // char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -345,13 +345,27 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       continue;
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+
+    // 如果该页可写，或者已经是 COW 共享状态页
+    if(flags & PTE_W) {
+      flags = (flags & ~PTE_W) | PTE_COW; // 清写权限，打上 COW 标记
+      *pte = (*pte & ~PTE_W) | PTE_COW;
+    }
+    extern void ref_inc(uint64);
+    ref_inc(pa); // 增加该物理页的引用计数
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      extern void ref_dec(uint64);
+      ref_dec(pa);
       goto err;
     }
+
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
+    // if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    //   kfree(mem);
+    //   goto err;
+    // }
   }
   return 0;
 
@@ -387,6 +401,13 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     if(va0 >= MAXVA)
       return -1;
     pte = walk(pagetable, va0, 0);
+
+    // 如果 copyout 遇到写时复制页面，在写入前执行分裂
+    if(pte != 0 && (*pte & PTE_V) && (*pte & PTE_COW)) {
+      if(cow_alloc(pagetable, va0) < 0)
+        return -1;
+      pte = walk(pagetable, va0, 0); // 重新获取已分裂成功的映射
+    }
 
     if(pte == 0 || (*pte & PTE_V) == 0) {
       struct proc *p = myproc();
@@ -487,4 +508,44 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+// 统一写时复制分配，支持异常处理和 copyout 双向复用
+int
+cow_alloc(pagetable_t pagetable, uint64 va)
+{
+  if(va >= MAXVA)
+    return -1;
+
+  uint64 va0 = PGROUNDDOWN(va);
+  pte_t *pte = walk(pagetable, va0, 0);
+  if(pte == 0)
+    return -1;
+  if((*pte & PTE_V) == 0)
+    return -1;
+
+  if(*pte & PTE_COW) {
+    uint64 pa = PTE2PA(*pte);
+    uint flags = PTE_FLAGS(*pte);
+
+    extern int ref_get(uint64);
+    if(ref_get(pa) == 1) {
+      // 独占引用，直接原地还原写权限并清除 COW 标志
+      *pte = (*pte & ~PTE_COW) | PTE_W;
+    } else {
+      // 多进程共享，kalloc 申请新物理页并进行数据拷贝
+      char *mem = kalloc();
+      if(mem == 0)
+        return -1;
+      memmove(mem, (char*)pa, PGSIZE);
+
+      // 绑定新页，赋予写权限，清除 COW 标志
+      *pte = PA2PTE(mem) | ((flags & ~PTE_COW) | PTE_W);
+
+      // 递减老物理页计数
+      kfree((void*)pa);
+    }
+    sfence_vma(); // 刷新 TLB
+  }
+  return 0;
 }

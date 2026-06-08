@@ -30,6 +30,7 @@ struct test_case tests[] = {
   { "File: Symlink mechanism", "symlinktest", {"symlinktest", 0}, 0 },
   // phase5
   { "Memory: lazy page allocation", "lazytests", {"lazytests", 0}, 0 },
+  { "Memory: Copy-on-Write fork", "cowtest", {"cowtest", 0}, 0 },
 
   // usertests
   // { "Official: usertests", "usertests", {"usertests", 0}, 0 }

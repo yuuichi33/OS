@@ -86,31 +86,38 @@ usertrap(void)
     uint64 sepc = r_sepc();   // 发生异常的指令地址
     // 处理用户态触发的按需缺页异常
     if(scause == 13 || scause == 15) {
-      // 异常地址必须处于进程合法的堆空间 [0, p->sz)
-      if(stval < p->sz) {
+      if(stval >= MAXVA) {
+        setkilled(p);
+      } else {
         uint64 va0 = PGROUNDDOWN(stval);
-        
-        // 如果地址已经映射了，却还报缺页（说明是只读页面写保护异常，拒绝非法修改）
         pte_t *pte = walk(p->pagetable, va0, 0);
+      
         if(pte == 0 || (*pte & PTE_V) == 0) {
-          char *mem = kalloc();
-          if(mem == 0) {
-            // 物理内存耗尽，Kill 进程
-            setkilled(p);
-          } else {
-            memset(mem, 0, PGSIZE);
-            if(mappages(p->pagetable, va0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U) < 0) {
-              kfree(mem);
+        if(stval < p->sz) {
+            char *mem = kalloc();
+            if(mem == 0) {
+              // 物理内存耗尽，Kill 进程
               setkilled(p);
+            } else {
+              memset(mem, 0, PGSIZE);
+              if(mappages(p->pagetable, va0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U) < 0) {
+                kfree(mem);
+                setkilled(p);
+              }
             }
+          } else {
+            // 只读写保护异常，Kill
+            setkilled(p);
+          }
+      } else if((*pte & PTE_COW) && scause == 15) {
+          // COW 触发的写中断，执行物理页分裂
+          if(cow_alloc(p->pagetable, va0) < 0) {
+            setkilled(p);
           }
         } else {
           // 只读写保护异常，Kill
           setkilled(p);
         }
-      } else {
-        // 真正的内存越界访问（Segment Fault），Kill
-        setkilled(p);
       }
     } else {
       switch (scause) {

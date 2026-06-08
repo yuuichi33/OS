@@ -247,7 +247,8 @@ graph TB
 - 堆内存管理目前采用 First-Fit 空闲链表方法，还有更复杂的 Buddy System 和 Slab Allocator方法
 - 进程调度算法 FCFS RR (还有 SPF NP-FP 等 ) 
 - 增加图形化界面
-- 优化完善 libc， 测试指标 量化优化结果
+- 完善 libc
+- 测试指标 量化优化结果
 
 ## 三、任务清单及进度规划
 
@@ -273,7 +274,7 @@ graph TB
 
 - 阶段五：进阶虚拟内存管理（Advanced VM）
   - [x] Lazy Allocation（按需分页）：重构 sbrk，通过捕获 13/15 号缺页中断动态分配物理页。
-  - [ ] Copy-On-Write Fork（写时复制）：在 kalloc 中引入物理页引用计数，在 fork 时共享只读页表，写操作时触发缺页拷贝。
+  - [x] Copy-On-Write Fork（写时复制）：在 kalloc 中引入物理页引用计数，在 fork 时共享只读页表，写操作时触发缺页拷贝。
   - [ ] mmap/munmap：引入虚拟内存区域（VMA）管理，实现文件与匿名的内存映射。
   - [ ] Shared Memory（共享内存）：基于 VMA 和引用计数，实现多进程共享物理页。
 
@@ -376,13 +377,19 @@ graph TB
 - [分析](devlog/phase5.md) `(devlog/phase5.md)`
 
 - 按需分页 lazy allocation
-  - 修改 sys_sbrk。当进程申请增加堆内存时，仅抬高虚拟地址边界 `p->sz`，不实际分配物理页、不修改页表。在缩减内存时，依然立刻释放物理页。
+  - 修改 sys_sbrk。当进程申请增加堆内存时，仅抬高虚拟地址边界 p->sz，不实际分配物理页、不修改页表。在缩减内存时，依然立刻释放物理页。
   - 在 usertrap() 中拦截读缺页（scause 13）与写缺页（scause 15）异常。当地址处于 `[0, p->sz)` 合法堆区间内时，通过 kalloc 动态申请物理页并通过 mappages 补齐映射。
   - 重构 walkaddr() 和 copyout()。当用户进程将尚未映射的 Lazy 内存指针传给 read/write 等系统调用时，内核在执行虚拟地址转换时能自动透明地为其补齐分配物理页。
   - 修改 uvmunmap 与 uvmcopy，使其在执行页表释放或 fork 拷贝时，遇到尚未分配物理页的 Lazy 页面时直接 continue，不再 Panic。
   - 修复官方 lazytests 退出码硬编码为 1 的问题，集成测试全部通过（`PASS: 16/16`）。
   <center><img src="figs/fig9.png" width="50%"></center>
-
+- Copy-On-Write Fork
+  - 重构 uvmcopy，在 fork 时不复制物理内存，仅复制页表项，清除 PTE_W 写权限并打上自定义的 PTE_COW 标记。
+  - 在 kalloc.c 中设计全局自旋锁保护的物理页计数器 page_ref。重构 kalloc 与 kfree，仅在引用计数递减到 0 时才真正归还物理空闲链表。
+  - 在 usertrap 中捕获 scause 15 写异常。若多进程共享则调用 cow_alloc 申请新页拷贝数据；若当前进程独占该页（计数为 1），则直接还原写权限，免去拷贝开销。
+  - 在 copyout() 中加入 PTE_COW 拦截与主动分裂，保障内核态向用户态写回数据时的安全性。
+  - 通过官方 cowtest.c 压力与并发测试，集成测试全部通过（`PASS: 17/17`）。
+  <center><img src="figs/fig10.png" width="50%"></center>
   
 ## 参考资料（部分）
 

@@ -66,6 +66,9 @@ void            kinit(void);
 void            kmalloc_init(void); 
 void*           kmalloc(uint64);   
 void            kmfree(void*);   
+void            ref_inc(uint64);    
+void            ref_dec(uint64);   
+int             ref_get(uint64);   
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -177,6 +180,8 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+int             cow_alloc(pagetable_t, uint64); 
+
 
 // plic.c
 void            plicinit(void);
