@@ -33,3 +33,5 @@
 #define SYS_sigreturn 31
 #define SYS_lseek 32
 #define SYS_symlink 33
+#define SYS_mmap    34
+#define SYS_munmap  35

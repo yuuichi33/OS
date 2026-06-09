@@ -611,3 +611,133 @@ sys_symlink(void)
 
   return 0;
 }
+
+// 将用户态数据安全写回磁盘
+static int
+vma_write_back(struct vma *v, uint64 addr, int len)
+{
+  begin_op();
+  ilock(v->f->ip);
+  int file_offset = v->offset + (addr - v->addr);
+  int max_write = v->f->ip->size - file_offset;
+  if(len > max_write)
+    len = max_write;
+  
+  if(writei(v->f->ip, 1, addr, file_offset, len) != len) {
+    iunlock(v->f->ip);
+    end_op();
+    return -1;
+  }
+  iupdate(v->f->ip);
+  iunlock(v->f->ip);
+  end_op();
+  return 0;
+}
+
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int len, prot, flags, fd, offset;
+  struct file *f;
+  struct proc *p = myproc();
+
+  // 获取用户态传入的 6 个参数
+  argaddr(0, &addr);
+  argint(1, &len);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  argint(5, &offset);
+
+  if(argfd(4, 0, &f) < 0)
+    return -1;
+
+  // 权限防御分支：如果共享可写，但打开的文件本身不可写，报错
+  if((prot & PROT_WRITE) && (flags & MAP_SHARED) && (f->writable == 0))
+    return -1;
+
+  if(f->type != FD_INODE)
+    return -1;
+
+  // 寻找空闲的 VMA 槽位
+  struct vma *v = 0;
+  for(int i = 0; i < 16; i++) {
+    if(p->vmas[i].valid == 0) {
+      v = &p->vmas[i];
+      break;
+    }
+  }
+  if(v == 0)
+    return -1; // VMA 槽位耗尽
+
+  // 自动寻找一块未被占用的、安全的 1GB 以上的高虚拟地址区间
+  uint64 va = 0x40000000; 
+  for(int i = 0; i < 16; i++) {
+    if(p->vmas[i].valid && p->vmas[i].addr + p->vmas[i].len > va) {
+      va = PGROUNDUP(p->vmas[i].addr + p->vmas[i].len);
+    }
+  }
+
+  v->valid = 1;
+  v->addr = va;
+  v->len = len;
+  v->prot = prot;
+  v->flags = flags;
+  v->f = filedup(f); // 递增文件引用计数，防止提前 close
+  v->offset = offset;
+
+  return va; // 返回分配出的虚拟起始地址
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int len;
+  struct proc *p = myproc();
+
+  argaddr(0, &addr);
+  argint(1, &len);
+
+  if(addr % PGSIZE != 0 || len <= 0)
+    return -1;
+
+  // 寻找完全覆盖该地址范围的 VMA
+  struct vma *v = 0;
+  for(int i = 0; i < 16; i++) {
+    if(p->vmas[i].valid && addr >= p->vmas[i].addr && addr + len <= p->vmas[i].addr + p->vmas[i].len) {
+      v = &p->vmas[i];
+      break;
+    }
+  }
+  if(v == 0)
+    return -1; // 找不到 VMA
+
+  // 如果是 MAP_SHARED，且页面已被修改建立过物理映射，将其写回文件
+  if(v->flags & MAP_SHARED) {
+    for(uint64 a = addr; a < addr + len; a += PGSIZE) {
+      pte_t *pte = walk(p->pagetable, a, 0);
+      if(pte && (*pte & PTE_V)) {
+        vma_write_back(v, a, PGSIZE);
+      }
+    }
+  }
+
+  // 解除内存页映射
+  uvmunmap(p->pagetable, addr, len / PGSIZE, 1);
+
+  // 缩减并更新对应的 VMA 信息
+  if(addr == v->addr && len == v->len) {
+    fileclose(v->f);
+    v->valid = 0;
+  } else if(addr == v->addr) {
+    v->offset += len;
+    v->addr += len;
+    v->len -= len;
+  } else {
+    v->len -= len;
+  }
+
+  return 0;
+}

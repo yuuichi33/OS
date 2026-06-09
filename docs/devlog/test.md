@@ -89,6 +89,13 @@
 - 三进程并发写入测试（threetest）：验证多进程共享同一物理页且交替并发写入时，物理分裂、计数器递减及独占进程“原地还原可写”分支的准确性。
 - 系统调用写安全测试（filetest）：验证通过管道向未分裂的只读 COW 页面写入数据时，内核态 `copyout` 的自动分裂机制是否安全生效。
 
+### mmaptest.c
+
+- 参考：https://github.com/mit-pdos/xv6-riscv-fall19/blob/xv6-riscv-fall19/user/mmaptest.c
+
+- 基础映射与解映射测试（mmap_test）：验证基础的文件随机映射、MAP_PRIVATE 私有读写保护、MAP_SHARED 共享自动回写以及 VMA 动态边界解析。
+- 父子进程页表隔离测试（fork_test）：验证 `fork` 时子进程能够安全复制父进程的 VMA 区域描述，且在子进程发生写时拷贝或延迟读取时，两者的物理页不发生干扰与污染。
+
 ### usertests.c ( xv6 官方测试集)
 
 - 系统调用参数合法性测试：通过构造非法用户指针、越界地址、超长字符串等场景，验证内核对 copyin/copyout/copyinstr 等用户态参数检查机制的正确性与安全性。

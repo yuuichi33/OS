@@ -31,9 +31,10 @@ struct test_case tests[] = {
   // phase5
   { "Memory: lazy page allocation", "lazytests", {"lazytests", 0}, 0 },
   { "Memory: Copy-on-Write fork", "cowtest", {"cowtest", 0}, 0 },
+  { "Memory: mmap/munmap", "mmaptest", {"mmaptest", 0}, 0 },
 
   // usertests
-  // { "Official: usertests", "usertests", {"usertests", 0}, 0 }
+  { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };
 
 void run_test(struct test_case *tc) {

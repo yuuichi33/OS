@@ -275,7 +275,7 @@ graph TB
 - 阶段五：进阶虚拟内存管理（Advanced VM）
   - [x] Lazy Allocation（按需分页）：重构 sbrk，通过捕获 13/15 号缺页中断动态分配物理页。
   - [x] Copy-On-Write Fork（写时复制）：在 kalloc 中引入物理页引用计数，在 fork 时共享只读页表，写操作时触发缺页拷贝。
-  - [ ] mmap/munmap：引入虚拟内存区域（VMA）管理，实现文件与匿名的内存映射。
+  - [x] mmap/munmap：引入虚拟内存区域（VMA）管理，实现文件与匿名的内存映射。
   - [ ] Shared Memory（共享内存）：基于 VMA 和引用计数，实现多进程共享物理页。
 
 - 阶段六：多线程机制与用户态同步（Threading & Futex）
@@ -383,6 +383,7 @@ graph TB
   - 修改 uvmunmap 与 uvmcopy，使其在执行页表释放或 fork 拷贝时，遇到尚未分配物理页的 Lazy 页面时直接 continue，不再 Panic。
   - 修复官方 lazytests 退出码硬编码为 1 的问题，集成测试全部通过（`PASS: 16/16`）。
   <center><img src="figs/fig9.png" width="50%"></center>
+
 - Copy-On-Write Fork
   - 重构 uvmcopy，在 fork 时不复制物理内存，仅复制页表项，清除 PTE_W 写权限并打上自定义的 PTE_COW 标记。
   - 在 kalloc.c 中设计全局自旋锁保护的物理页计数器 page_ref。重构 kalloc 与 kfree，仅在引用计数递减到 0 时才真正归还物理空闲链表。
@@ -390,6 +391,14 @@ graph TB
   - 在 copyout() 中加入 PTE_COW 拦截与主动分裂，保障内核态向用户态写回数据时的安全性。
   - 通过官方 cowtest.c 压力与并发测试，集成测试全部通过（`PASS: 17/17`）。
   <center><img src="figs/fig10.png" width="50%"></center>
+
+- mmap/munmap 文件内存映射
+  - 设计虚拟内存区域 struct vma 结构，并在 PCB 中维护进程最大 16 个 VMA 映射槽。
+  - 实现 sys_mmap 系统调用。在 mmap 时仅在 VMA 中登记边界，不进行实际物理分配。在发生 VMA 区间缺页时，动态申请物理页，并调用 readi 将磁盘对应的文件块按需调入物理内存。
+  - 在 sys_munmap 和 exit() 时，遍历映射区间，若为 MAP_SHARED 且已被建立物理映射的页，通过 writei 自动将脏数据刷回对应磁盘文件。
+  - 在 sys_sbrk 中实现动态上限检测，限制进程大小不能超过 VMA 的最低起始地址，防止堆与 VMA 重叠。
+  - 通过官方 mmaptest.c 所有测试子项，集成测试全部通过（`PASS: 18/18`）。
+  <center><img src="figs/fig11.png" width="50%"></center>
   
 ## 参考资料（部分）
 
@@ -404,5 +413,6 @@ graph TB
 - https://pdos.csail.mit.edu/6.S081
 - https://linux-kernel-labs.github.io/
 - https://pdos.csail.mit.edu/6.S081/2020/labs/lazy.html
+- https://fail.lingfei.xyz/tags/xv6/
 
 <!-- </div> -->

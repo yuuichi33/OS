@@ -5,6 +5,11 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fs.h"         
+#include "sleeplock.h"  
+#include "file.h"       
+#include "fcntl.h"   
+
 
 struct spinlock tickslock;
 uint ticks;
@@ -90,33 +95,75 @@ usertrap(void)
         setkilled(p);
       } else {
         uint64 va0 = PGROUNDDOWN(stval);
-        pte_t *pte = walk(p->pagetable, va0, 0);
-      
-        if(pte == 0 || (*pte & PTE_V) == 0) {
-        if(stval < p->sz) {
+        // pte_t *pte = walk(p->pagetable, va0, 0);
+        // 增加 VMA 检查
+        // 1. 先检查该异常地址是否属于某一个 VMA 映射区
+        struct vma *v = 0;
+        for(int i = 0; i < 16; i++) {
+          if(p->vmas[i].valid && stval >= p->vmas[i].addr && stval < p->vmas[i].addr + p->vmas[i].len) {
+            v = &p->vmas[i];
+            break;
+          }
+        }
+
+        if(v != 0) {
+          // 异常分支防御：如果发生了写异常，但该映射区是只读的，报错 Kill 进程
+          if(scause == 15 && !(v->prot & PROT_WRITE)) {
+            setkilled(p);
+          } else {
+            // 进行 VMA 物理页按需读取与分配
             char *mem = kalloc();
             if(mem == 0) {
-              // 物理内存耗尽，Kill 进程
               setkilled(p);
             } else {
               memset(mem, 0, PGSIZE);
-              if(mappages(p->pagetable, va0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U) < 0) {
+              
+              // 锁住 Inode，调用 readi 从文件的指定位置读取 4096 字节到物理内存中
+              ilock(v->f->ip);
+              int file_offset = v->offset + (va0 - v->addr);
+              readi(v->f->ip, 0, (uint64)mem, file_offset, PGSIZE);
+              iunlock(v->f->ip);
+
+              // 计算映射标志权限
+              int perm = PTE_U;
+              if(v->prot & PROT_READ) perm |= PTE_R;
+              if(v->prot & PROT_WRITE) perm |= PTE_W;
+
+              if(mappages(p->pagetable, va0, PGSIZE, (uint64)mem, perm) < 0) {
                 kfree(mem);
                 setkilled(p);
               }
+            }
+          }
+        } else {
+          // 2. 如果不属于 VMA，再走原来的 Lazy / COW 页面处理逻辑
+          pte_t *pte = walk(p->pagetable, va0, 0);
+          if(pte == 0 || (*pte & PTE_V) == 0) {
+          if(stval < PGROUNDUP(p->sz)) {
+              char *mem = kalloc();
+              if(mem == 0) {
+                // 物理内存耗尽，Kill 进程
+                setkilled(p);
+              } else {
+                memset(mem, 0, PGSIZE);
+                if(mappages(p->pagetable, va0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U) < 0) {
+                  kfree(mem);
+                  setkilled(p);
+                }
+              }
+            } else {
+              // 只读写保护异常，Kill
+              setkilled(p);
+            }
+        } else if((*pte & PTE_COW) && scause == 15) {
+            // COW 触发的写中断，执行物理页分裂
+            if(cow_alloc(p->pagetable, va0) < 0) {
+              setkilled(p);
             }
           } else {
             // 只读写保护异常，Kill
             setkilled(p);
           }
-      } else if((*pte & PTE_COW) && scause == 15) {
-          // COW 触发的写中断，执行物理页分裂
-          if(cow_alloc(p->pagetable, va0) < 0) {
-            setkilled(p);
-          }
-        } else {
-          // 只读写保护异常，Kill
-          setkilled(p);
         }
       }
     } else {

@@ -81,6 +81,17 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+// VMA
+struct vma {
+  int valid;           // 槽位是否被占用 (1: 活跃, 0: 空闲)
+  uint64 addr;         // 映射在用户空间的起始虚拟地址
+  int len;             // 映射长度 (字节)
+  int prot;            // 访问权限 (PROT_READ, PROT_WRITE)
+  int flags;           // 映射标志 (MAP_SHARED, MAP_PRIVATE)
+  struct file *f;      // 对应的磁盘文件结构体指针
+  int offset;          // 文件起始偏移量
+};
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -112,4 +123,7 @@ struct proc {
   int alarm_ticks;             // 累计时钟滴答数
   struct trapframe *alarm_tf;  // 动态申请的备份现场（使用 kmalloc）
   int alarm_running;           // 防重入锁（1：正在运行，0：未运行）
+
+  struct vma vmas[16];         // VMA 数组
+
 };

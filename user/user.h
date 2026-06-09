@@ -1,3 +1,11 @@
+#define PROT_NONE       0x0
+#define PROT_READ       0x1
+#define PROT_WRITE      0x2
+#define PROT_EXEC       0x4
+
+#define MAP_SHARED      0x01
+#define MAP_PRIVATE     0x02
+
 struct stat;
 
 struct uproc {
@@ -46,6 +54,8 @@ int sigreturn(void);
 int lseek(int, int, int);
 #define O_NOFOLLOW 0x800
 int symlink(const char*, const char*);
+void* mmap(void*, int, int, int, int, int);
+int munmap(void*, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

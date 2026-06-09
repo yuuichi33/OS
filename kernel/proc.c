@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fs.h"         
+#include "sleeplock.h"  
+#include "file.h"       
+#include "fcntl.h"    
 
 struct cpu cpus[NCPU];
 
@@ -131,6 +135,11 @@ found:
   p->alarm_handler = 0;
   p->alarm_ticks = 0;
   p->alarm_running = 0;
+
+  // 初始化 VMA
+  for(int i = 0; i < 16; i++) {
+    p->vmas[i].valid = 0;
+  }
 
   if((p->alarm_tf = (struct trapframe*)kmalloc(sizeof(struct trapframe))) == 0){
     freeproc(p);
@@ -326,6 +335,14 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  // 子进程继承父进程的 VMA 映射区，并增加对应文件引用计数
+  for(int i = 0; i < 16; i++) {
+    if(p->vmas[i].valid) {
+      np->vmas[i] = p->vmas[i];
+      filedup(p->vmas[i].f); // 递增文件引用计数
+    }
+  }
+
   pid = np->pid;
 
   release(&np->lock);
@@ -366,6 +383,28 @@ exit(int status)
 
   if(p == initproc)
     panic("init exiting");
+
+  for(int i = 0; i < 16; i++) {
+    if(p->vmas[i].valid) {
+      if(p->vmas[i].flags & MAP_SHARED) {
+        for(uint64 a = p->vmas[i].addr; a < p->vmas[i].addr + p->vmas[i].len; a += PGSIZE) {
+          pte_t *pte = walk(p->pagetable, a, 0);
+          if(pte && (*pte & PTE_V)) {
+            begin_op();
+            ilock(p->vmas[i].f->ip);
+            int file_offset = p->vmas[i].offset + (a - p->vmas[i].addr);
+            writei(p->vmas[i].f->ip, 1, a, file_offset, PGSIZE);
+            iupdate(p->vmas[i].f->ip);
+            iunlock(p->vmas[i].f->ip);
+            end_op();
+          }
+        }
+      }
+      uvmunmap(p->pagetable, p->vmas[i].addr, p->vmas[i].len / PGSIZE, 1);
+      fileclose(p->vmas[i].f);
+      p->vmas[i].valid = 0;
+    }
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){

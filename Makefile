@@ -146,6 +146,7 @@ UPROGS=\
 	$U/_symlinktest\
 	$U/_lazytests\
 	$U/_cowtest\
+	$U/_mmaptest\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)
