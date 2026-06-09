@@ -32,9 +32,13 @@ struct test_case tests[] = {
   { "Memory: lazy page allocation", "lazytests", {"lazytests", 0}, 0 },
   { "Memory: Copy-on-Write fork", "cowtest", {"cowtest", 0}, 0 },
   { "Memory: mmap/munmap", "mmaptest", {"mmaptest", 0}, 0 },
+  
+  // Official
+  // { "Process: forktest functionality", "forktest", {"forktest", 0}, 0 },
+  // { "File system stress: stressfs", "stressfs", {"stressfs", 0}, 0 },
+  // { "Process: zombie creation", "zombie", {"zombie", 0}, 0 },
+  { "Official: usertests", "usertests", {"usertests", 0}, 0 },
 
-  // usertests
-  { "Official: usertests", "usertests", {"usertests", 0}, 0 }
 };
 
 void run_test(struct test_case *tc) {

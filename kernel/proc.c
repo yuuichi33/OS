@@ -400,7 +400,10 @@ exit(int status)
           }
         }
       }
-      uvmunmap(p->pagetable, p->vmas[i].addr, p->vmas[i].len / PGSIZE, 1);
+      int unmap_pages = PGROUNDUP(p->vmas[i].len) / PGSIZE;
+      uvmunmap(p->pagetable, p->vmas[i].addr, unmap_pages, 1);
+
+      // uvmunmap(p->pagetable, p->vmas[i].addr, p->vmas[i].len / PGSIZE, 1);
       fileclose(p->vmas[i].f);
       p->vmas[i].valid = 0;
     }
@@ -463,15 +466,20 @@ wait(uint64 addr)
         if(pp->state == ZOMBIE){
           // Found one.
           pid = pp->pid;
-          if(addr != 0 && copyout(p->pagetable, addr, (char *)&pp->xstate,
-                                  sizeof(pp->xstate)) < 0) {
-            release(&pp->lock);
-            release(&wait_lock);
-            return -1;
-          }
+          int temp_xstate = pp->xstate;
+
           freeproc(pp);
           release(&pp->lock);
           release(&wait_lock);
+
+          if(addr != 0 && copyout(p->pagetable, addr, (char *)&temp_xstate, sizeof(temp_xstate)) < 0) {
+            // release(&pp->lock);
+            // release(&wait_lock);
+            return -1;
+          }
+          // freeproc(pp);
+          // release(&pp->lock);
+          // release(&wait_lock);
           return pid;
         }
         release(&pp->lock);
@@ -794,15 +802,20 @@ waitpid(int target_pid, uint64 addr, int options)
         if(pp->state == ZOMBIE){
           // 找到目标僵尸子进程，进行回收
           pid = pp->pid;
-          if(addr != 0 && copyout(p->pagetable, addr, (char *)&pp->xstate,
-                                  sizeof(pp->xstate)) < 0) {
-            release(&pp->lock);
-            release(&wait_lock);
-            return -1;
-          }
+          int temp_xstate = pp->xstate;
+          
           freeproc(pp);
           release(&pp->lock);
           release(&wait_lock);
+
+          if(addr != 0 && copyout(p->pagetable, addr, (char *)&temp_xstate, sizeof(temp_xstate)) < 0) {
+            // release(&pp->lock);
+            // release(&wait_lock);
+            return -1;
+          }
+          // freeproc(pp);
+          // release(&pp->lock);
+          // release(&wait_lock);
           return pid;
         }
         release(&pp->lock);

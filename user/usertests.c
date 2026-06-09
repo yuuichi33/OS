@@ -2956,10 +2956,11 @@ run(void f(char *), char *s) {
     exit(0);
   } else {
     wait(&xstatus);
-    if(xstatus != 0) 
+    if(xstatus != 0) {
       printf("FAILED\n");
-    else
+    } else {
       printf("OK\n");
+    }
     return xstatus == 0;
   }
 }

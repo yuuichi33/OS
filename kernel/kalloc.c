@@ -213,6 +213,34 @@ kmfree(void *addr)
     }
     curr = curr->next;
   }
+  
+  struct kmem_header *prev = 0;
+  curr = kmalloc_mem.head;
+  while(curr) {
+    // 如果一个块是空闲的，且大小刚好是一个完整页减去 header 的大小，
+    // 并且它的起始地址是 4096 页面对齐的，说明这整整一个 4KB 物理页已经空无一人了！
+    if(curr->is_free && 
+       curr->size == PGSIZE - sizeof(struct kmem_header) && 
+       ((uint64)curr % PGSIZE) == 0) {
+      
+      // 将该物理页从 kmalloc 链表中摘除
+      if(prev == 0) {
+        kmalloc_mem.head = curr->next;
+      } else {
+        prev->next = curr->next;
+      }
+      
+      struct kmem_header *to_free = curr;
+      curr = curr->next;
+      
+      // 彻底归还给底层的物理内存管理器
+      kfree((void*)to_free);
+      continue;
+    }
+    prev = curr;
+    curr = curr->next;
+  }
+
   release(&kmalloc_mem.lock);
 }
 

@@ -238,6 +238,7 @@ graph TB
 - 单元测试：针对新增功能分别自行设计测试程序或引入官方测试文件，精准验证单一模块功能的正确性。
 - 异常测试：构造非法内存访问和异常系统调用场景，验证系统异常隔离能力和资源回收能力。
 - 系统测试：运行 xv6 原生测试集 usertests ，全面验证进程管理、内存管理、文件系统及系统调用等核心功能的正确性与兼容性。
+- 压力测试：运行 xv6 原生的 grind 测试，测试系统稳定性。
 - 集成测试：实现统一测试框架 alltests.c，对新增功能测试、异常测试以及 xv6 原生 usertests 进行统一调度，实现一键式自动化测试。通过集成运行验证各模块之间的兼容性与协同工作能力，并检查系统整体稳定性。
 
 - [测试说明文档](devlog/test.md) `(devlog/test.md)`
@@ -299,7 +300,7 @@ graph TB
 - 初始化 GitHub 仓库 https://github.com/yuuichi33/OS 并完成首次推送。
 - 新建并切换至独立开发分支 dev，强制回滚至 2022 年底稳定提交 74c1eba，避开后续版本对 QEMU >= 7.2 的编译限制，确保兼容性。
 - 通过 make qemu 成功编译并启动系统。
-- 在模拟器中全量跑通内核测试集 usertests，测试结果为 ALL TESTS PASSED。
+- 在模拟器中全量跑通内核测试集 usertests，测试结果为 ALL TESTS PASSED。同时运行官方压力测试程序 grind，在持续运行过程中未出现 panic、死锁或异常退出现象，验证系统基线版本具备良好的稳定性。
 <center><img src="figs/fig1.png" width="50%"></center>
 
 
@@ -399,6 +400,9 @@ graph TB
   - 在 sys_sbrk 中实现动态上限检测，限制进程大小不能超过 VMA 的最低起始地址，防止堆与 VMA 重叠。
   - 通过官方 mmaptest.c 所有测试子项，集成测试全部通过（`PASS: 18/18`）。
   <center><img src="figs/fig11.png" width="50%"></center>
+
+- 此时进行了一次全量测试
+  - 测试结果：
   
 ## 参考资料（部分）
 
