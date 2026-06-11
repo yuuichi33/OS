@@ -420,6 +420,13 @@ graph TB
   <center><img src="figs/fig11.png" width="50%"></center>
 
 - 此时进行了一次全量测试，测试结果：alltests 全量通过； grind 连续运行数分钟，系统稳定。
+
+## 五、测试与验证
+### 5.1 llm mmap vs read
+
+- 参考：https://github.com/karpathy/llama2.c
+
+
   
 ## 参考资料（部分）
 
@@ -435,5 +442,6 @@ graph TB
 - https://linux-kernel-labs.github.io/
 - https://pdos.csail.mit.edu/6.S081/2020/labs/lazy.html
 - https://fail.lingfei.xyz/tags/xv6/
+- https://github.com/karpathy/llama2.c
 
 <!-- </div> -->

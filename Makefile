@@ -147,10 +147,14 @@ UPROGS=\
 	$U/_lazytests\
 	$U/_cowtest\
 	$U/_mmaptest\
+	$U/_llama\
 
 
-fs.img: mkfs/mkfs README $(UPROGS)
-	mkfs/mkfs fs.img README $(UPROGS)
+
+# fs.img: mkfs/mkfs README $(UPROGS)
+# 	mkfs/mkfs fs.img README $(UPROGS)
+fs.img: mkfs/mkfs README.md stories260K.bin $(UPROGS)
+	mkfs/mkfs fs.img README.md stories260K.bin $(UPROGS)
 
 -include kernel/*.d user/*.d
 
