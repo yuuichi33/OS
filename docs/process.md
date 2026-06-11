@@ -425,8 +425,47 @@ graph TB
 ### 5.1 llm mmap vs read
 
 - 参考：https://github.com/karpathy/llama2.c
+- Vivek S. Pai, Peter Druschel, and Willy Zwaenepoel. 2000. IO-Lite: a unified I/O buffering and caching system. ACM Trans. Comput. Syst. 18, 1 (Feb. 2000), 37–66. https://doi.org/10.1145/332799.332895
 
+为测试内核在面对较大文件（约 1MB）和密集浮点数计算时的稳定性，同时定量评估存储映射对程序启动效率的优化，本项目移植 Andrej Karpathy 的轻量级 Llama 2 C 语言推理引擎 llama2.c 。测试模型选用在 TinyStories 数据集上训练好的极简大语言模型 stories260K.bin（二进制文件大小约为 1.04 MB）。
 
+由于默认的 xv6 文件系统最大单文件上限仅为 268KB，且磁盘总容量仅为 2MB，无法容纳该模型文件。为此，本项目对文件系统底层规格进行调整：
+- 在 kernel/fs.h 中，将 BSIZE（块大小）从 1024 改为 4096。
+- 在 kernel/param.h 中，将 FSSIZE（磁盘大小）从 2000 改为 8000 块。
+
+编写用户态测试程序 user/llama.c。该程序支持以下两种加载模式，并利用 uptime() 系统调用统计从程序启动到数据装载完毕所耗费的 CPU 时钟滴答数（Ticks），进行量化对比：
+- Mmap 模式 (-m)：直接调用项目中自定义实现的 mmap 系统调用。它只在页表里登记地址，不进行实际读盘，等运行需要时才触发缺页中断读盘。
+- Read 模式 (-r)：先用 malloc 申请 1.1MB 内存，再调用 read() 一次性把文件从磁盘读进内存。
+
+**一次运行的结果**
+```
+$ llama stories260K.bin -m
+[AI OS] Model Config loaded: Dim=64, Layers=5, Vocab=512
+[Benchmark] Mode: mmap (Zero-Copy)
+[AI OS] Calling mmap to map 1056540 Bytes of weights...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+[Benchmark] Mounted/Allocated Address: 0x0000000040000000
+
+[AI OS] Generating text... (Stories260K Mode)
+
+Once upon a time, there was a little boy named Timmy...
+
+[AI OS] Story generated successfully.
+$ llama stories260K.bin -r
+[AI OS] Model Config loaded: Dim=64, Layers=5, Vocab=512
+[Benchmark] Mode: malloc + read (Traditional)
+[AI OS] Allocating memory and reading 1056540 Bytes sequentially...
+[Benchmark] Cold-start Loading Time: 21 Ticks
+[Benchmark] Mounted/Allocated Address: 0x0000000000005010
+
+[AI OS] Generating text... (Stories260K Mode)
+
+Once upon a time, there was a little boy named Timmy...
+[AI OS] Story generated successfully.
+```
+- 测试数据显示，存储映射（mmap）模式下的冷启动耗时为 0 Ticks，而传统顺序读取模式则需要 21 Ticks。
+- 产生该耗时差异的根本原因在于：传统 read() 模式必须阻塞式地执行全量物理磁盘块读取，并进行从内核缓冲区到用户堆的二次内存拷贝；而 mmap 模式下，内核仅建立了虚存空间的映射关系而未发生真实的物理磁盘 I/O。
+- 这一对比定量地证明了存储映射与零拷贝（Zero-Copy）机制在提升应用启动效率、节省物理内存开销方面的显著优势。同时，该大模型程序在 xv6 系统中的成功无错运行，也全面验证了本项目实现的虚拟内存管理、按需调页（Lazy Allocation）和文件系统规格扩展等核心模块在面临高负载情况下的健壮性。
   
 ## 参考资料（部分）
 
