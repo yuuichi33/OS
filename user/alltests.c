@@ -41,7 +41,7 @@ struct test_case tests[] = {
   // { "Process: forktest functionality", "forktest", {"forktest", 0}, 0 },
   // { "File system stress: stressfs", "stressfs", {"stressfs", 0}, 0 },
   // { "Process: zombie creation", "zombie", {"zombie", 0}, 0 },
-  // { "Official: usertests", "usertests", {"usertests", 0}, 0 },
+  { "Official: usertests", "usertests", {"usertests", 0}, 0 },
 
 };
 
