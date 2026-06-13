@@ -20,6 +20,8 @@ struct proc *initproc;
 
 int nextpid = 1;
 struct spinlock pid_lock;
+struct spinlock futex_lock;
+
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
@@ -57,6 +59,8 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+  initlock(&futex_lock, "futex_lock");
+
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -904,4 +908,85 @@ clone(uint64 fn, uint64 stack, uint64 arg)
   release(&np->lock);
 
   return pid;
+}
+
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+
+uint64
+sys_futex(void)
+{
+  uint64 uaddr;
+  int op, val;
+  struct proc *p = myproc();
+
+  argaddr(0, &uaddr);
+  argint(1, &op);
+  argint(2, &val);
+
+  // 地址对齐检验
+  if(uaddr % 4 != 0)
+    return -1;
+
+  // 将用户态虚拟地址转换为物理地址作为同步 Key
+  uint64 paddr = walkaddr(p->pagetable, uaddr);
+  if(paddr == 0)
+    return -1;
+  paddr = paddr + (uaddr % PGSIZE);
+
+  extern struct spinlock futex_lock;
+  extern struct proc proc[];
+
+  if(op == FUTEX_WAIT) {
+    acquire(&futex_lock);
+
+    // 从用户空间拷贝当前锁变量的实际数值
+    int cur_val;
+    if(copyin(p->pagetable, (char*)&cur_val, uaddr, sizeof(int)) < 0) {
+      release(&futex_lock);
+      return -1;
+    }
+
+    // 原子性检查：若锁的值已被修改，说明不需睡眠，立即返回
+    if(cur_val != val) {
+      release(&futex_lock);
+      return -2; // 返回特定错误码表示值不匹配
+    }
+
+    // 锁序控制：先拿进程锁，再放全局同步锁，确保睡眠动作的强原子性
+    acquire(&p->lock);
+    p->chan = (void*)paddr;
+    p->state = SLEEPING;
+    release(&futex_lock);
+
+    // 切换上下文挂起
+    sched();
+
+    // 唤醒后清理通道
+    p->chan = 0;
+    release(&p->lock);
+    return 0;
+
+  } else if(op == FUTEX_WAKE) {
+    acquire(&futex_lock);
+    int woken = 0;
+
+    // 遍历进程表，唤醒最多 val 个在同一物理地址上等待的线程
+    for(struct proc *np = proc; np < &proc[NPROC]; np++) {
+      if(np != p) {
+        acquire(&np->lock);
+        if(np->state == SLEEPING && np->chan == (void*)paddr) {
+          np->state = RUNNABLE;
+          woken++;
+        }
+        release(&np->lock);
+        if(woken >= val)
+          break;
+      }
+    }
+    release(&futex_lock);
+    return woken; // 返回实际唤醒的线程数
+  }
+
+  return -1;
 }

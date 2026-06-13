@@ -149,6 +149,7 @@ UPROGS=\
 	$U/_mmaptest\
 	$U/_llama\
 	$U/_clonetest\
+    $U/_futextest\
 
 
 

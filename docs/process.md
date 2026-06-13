@@ -433,7 +433,7 @@ graph TB
   - 通过官方 mmaptest.c 所有测试子项，集成测试全部通过（`PASS: 18/18`）。
   <center><img src="figs/fig11.png" width="50%"></center>
 
-- 此时进行了一次全量测试，测试结果：alltests （含 Phase 2-5、Llama2 C 及官方测试集）全量通过； grind 连续运行数分钟，系统稳定。
+- 此时进行了一次全量测试，测试结果：alltests （含 Phase 2-5、Llama2 C、usertest）全量通过； grind 连续运行数分钟，系统稳定。
 
 ### 4.6 多线程机制与用户态同步
 - [分析](devlog/phase6.md) `(devlog/phase6.md)`
@@ -448,9 +448,18 @@ graph TB
   - 编写 clonetest.c 验证参数传递、全局与堆内存共享、栈隔离以及多核高并发退出的正确性，集成测试全部通过（`PASS: 19/19`）。
   <center><img src="figs/fig12.png" width="50%"></center>
 
-- 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-6、Llama2 C 及官方测试集）全量通过；grind 连续运行数分钟，系统稳定。
+- 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-5、clonetest、Llama2 C、usertest）全量通过；grind 连续运行数分钟，系统稳定。
 
-- futex
+- futex 用户态快速同步锁
+  - 虚拟地址物理转换作为 Key、全局锁控制睡眠锁序方法实现 futex 同步机制。
+  - 使用 walkaddr 结合地址偏移，将锁的虚拟地址（uaddr）转换为物理地址（paddr）作为在内核态 sleep 和 wakeup 的通道标识（chan）。
+  - 在 FUTEX_WAIT 分支，获取全局自旋锁 futex_lock 并通过 copyin 读取锁的实数值。若实数值与期望值 val 不符，立即释放锁返回，防止在检查与睡眠之间因发生线程切换导致的 Lost Wakeup（丢失唤醒）隐患；若值相符，则获取进程锁 p->lock，修改状态为 SLEEPING，释放 futex_lock 并调用 sched() 挂起进程。
+  - 在 FUTEX_WAKE 分支，获取 futex_lock 并遍历进程表，寻找状态为 SLEEPING 且等待通道为该物理地址 paddr 的进程，精准唤醒最多 val 个。
+  - 编写 futextest.c，覆盖测试锁 Fastpath、Lost Wakeup 拦截以及多核多进程高并发锁竞争。集成测试全部通过（`PASS: 20/20`）。
+  <center><img src="figs/fig13.png" width="50%"></center>
+
+- 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-6、Llama2 C、usertest）全量通过；grind 连续运行数分钟，系统稳定。
+
 
 ## 五、测试与验证
 ### 5.1 llm mmap vs read

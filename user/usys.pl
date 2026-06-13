@@ -51,3 +51,4 @@ entry("symlink");
 entry("mmap");
 entry("munmap");
 entry("clone");
+entry("futex");

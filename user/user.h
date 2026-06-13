@@ -57,6 +57,9 @@ int symlink(const char*, const char*);
 void* mmap(void*, int, int, int, int, int);
 int munmap(void*, int);
 int clone(void (*fn)(void*), void *stack, void *arg);
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+int futex(void *uaddr, int op, int val);
 
 // ulib.c
 int stat(const char*, struct stat*);

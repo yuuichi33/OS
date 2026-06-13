@@ -116,6 +116,8 @@ extern uint64 sys_symlink(void);
 extern uint64 sys_mmap(void);
 extern uint64 sys_munmap(void);
 extern uint64 sys_clone(void);
+extern uint64 sys_futex(void);
+
 
 
 // An array mapping syscall numbers from syscall.h
@@ -157,6 +159,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mmap]        sys_mmap,
 [SYS_munmap]      sys_munmap,
 [SYS_clone]   sys_clone,
+[SYS_futex]   sys_futex,
+
 
 };
 

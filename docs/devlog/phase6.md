@@ -98,11 +98,8 @@ flowchart TB
     val) 唤醒等待线程。
 
 
-
 1.  系统调用接口：
-
     int sys_futex(uint64 uaddr, int op, int val);
-
       - uaddr：用户态锁变量的虚拟地址。
       - op：操作类型，主要实现 FUTEX_WAIT 和 FUTEX_WAKE。
       - val：期望值（对于 WAIT）或唤醒数量（对于 WAKE）。
@@ -114,7 +111,6 @@ flowchart TB
     paddr = paddr + (uaddr % PGSIZE); // 得到准确的物理地址
 
 3.  操作分支实现：
-
       - FUTEX_WAIT：
           - 必须保证“检查锁变量的值”与“进入睡眠”这两个操作的原子性，防止在检查后、睡眠前发生线程切换（经典的 Lost Wakeup 问题）。
           - 内核获取一个全局自旋锁 futex_table_lock。
@@ -127,3 +123,18 @@ flowchart TB
           - 遍历进程表 proc[]，寻找处于 SLEEPING 状态且 chan == (void*)paddr 的线程。
           - 唤醒最多 val 个匹配的线程（通常 val=1 唤醒一个，或 val=INT_MAX 唤醒所有）。
           - 释放 futex_table_lock 并返回。
+
+
+futex（Fast Userspace Mutex）的核心理念是：在没有锁竞争时，线程完全在用户态通过原子指令快速完成加锁/解锁；只有在面临锁竞争时，才通过系统调用陷入内核进行挂起或唤醒。
+在 xv6-riscv 中实现多线程安全的 sys_futex，需解决以下两个核心挑战：
+- 跨虚存映射的物理地址 Key 机制
+  - 在多线程或未来多进程共享内存中，不同的执行流可能使用不同的页表（虽然物理地址共享）。为了让所有线程能感知同一个锁，sys_futex 不能使用用户态虚拟地址（uaddr）作为休眠的通道标识（chan），而必须提取其对应的物理地址作为 Key：paddr=walkaddr(pagetable,uaddr)+(uaddr(modPGSIZE))
+- Lost Wakeup（丢失唤醒）并发隐患解决
+  - 隐患过程：线程 A 在用户态检测到锁被占用，准备调用 sys_futex(..., FUTEX_WAIT, 1)。但在它即将陷入内核前发生时钟中断，线程 B 释放了锁并调用 sys_futex(..., FUTEX_WAKE, 1)。由于线程 A 尚未进入内核睡眠，这次 Wakeup 信号被永久丢失，导致线程 A 随后陷入内核后将永远无法被唤醒。
+  - 解决方法：在内核引入一个全局自旋锁 futex_lock。
+    - 获取 futex_lock。
+    - 利用 copyin 安全读取当前用户态锁的实际值 cur_val。
+    - 比对 cur_val 与期望值 val：
+      - 若 cur_val != val，说明在陷入内核的空档期锁已被释放，立即释放 futex_lock 并返回，避免进入睡眠；
+      - 若 cur_val == val，将当前线程的 chan 设为物理地址 paddr，状态设为 SLEEPING。
+- 精细锁序控制：为了在切换上下文时释放全局锁，须先获取当前进程的自旋锁 p->lock，再释放全局锁 futex_lock，最后调用 sched()。这保证了“值比对”与“休眠”两个动作的强原子性，彻底解决 Lost Wakeup 问题。

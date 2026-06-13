@@ -36,3 +36,4 @@
 #define SYS_mmap    34
 #define SYS_munmap  35
 #define SYS_clone  36
+#define SYS_futex  37
