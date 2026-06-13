@@ -135,6 +135,8 @@ found:
   p->alarm_handler = 0;
   p->alarm_ticks = 0;
   p->alarm_running = 0;
+  p->is_thread = 0;
+  p->tgid = p->pid; // 基础进程的 tgid 为其自身 pid
 
   // 初始化 VMA
   for(int i = 0; i < 16; i++) {
@@ -837,4 +839,69 @@ waitpid(int target_pid, uint64 addr, int options)
     // 否则，父进程挂起等待子进程退出
     sleep(p, &wait_lock);
   }
+}
+
+// clone
+int
+clone(uint64 fn, uint64 stack, uint64 arg)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *p = myproc();
+
+  // 1. 分配一个独立的 PCB (这会自动在 np->pagetable 里映射独立的 np->trapframe)
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // 2. 将父进程的用户地址映射 (0 ~ p->sz) 直接物理共享复制到子进程的页表
+  if(uvmsharecopy(p->pagetable, np->pagetable, p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+  np->sz = p->sz;
+
+  // 3. 复制父进程的通用寄存器数据
+  *(np->trapframe) = *(p->trapframe);
+
+  // 4. 配置子线程独立的运行上下文
+  np->trapframe->epc = fn;        // 执行入口
+  np->trapframe->sp = stack;      // 独立的线程用户栈
+  np->trapframe->a0 = arg;        // 传入入口函数的第一个参数 (RISC-V a0)
+
+  // 5. 复制并递增父进程已打开文件的引用计数
+  for(i = 0; i < NOFILE; i++) {
+    if(p->ofile[i]) {
+      np->ofile[i] = filedup(p->ofile[i]);
+    }
+  }
+  np->cwd = idup(p->cwd);
+
+  // 复制 VMA 
+  for(i = 0; i < 16; i++) {
+    if(p->vmas[i].valid) {
+      np->vmas[i] = p->vmas[i];
+      filedup(p->vmas[i].f);
+    }
+  }
+
+  safestrcpy(np->name, p->name, sizeof(p->name));
+  pid = np->pid;
+
+  np->is_thread = 1;
+  np->tgid = p->tgid;
+
+  release(&np->lock);
+
+  // 挂载父子关系，便于 wait()/waitpid() 正常回收
+  acquire(&wait_lock);
+  np->parent = p;
+  release(&wait_lock);
+
+  acquire(&np->lock);
+  np->state = RUNNABLE;
+  release(&np->lock);
+
+  return pid;
 }

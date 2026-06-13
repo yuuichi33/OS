@@ -248,3 +248,19 @@ sys_sigreturn(void)
   // 必须返回恢复后现场的 a0 寄存器值，否则内核系统调用分发框架会用 0 覆盖用户态的 a0，导致 test1 变量损坏。
   return p->trapframe->a0;
 }
+
+uint64
+sys_clone(void)
+{
+  uint64 fn;
+  uint64 stack;
+  uint64 arg;
+
+  // 读取用户态传入的 3 个参数：入口地址、用户栈顶、传参值
+  argaddr(0, &fn);
+  argaddr(1, &stack);
+  argaddr(2, &arg);
+
+  extern int clone(uint64, uint64, uint64);
+  return clone(fn, stack, arg);
+}

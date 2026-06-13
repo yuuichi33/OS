@@ -148,6 +148,8 @@ UPROGS=\
 	$U/_cowtest\
 	$U/_mmaptest\
 	$U/_llama\
+	$U/_clonetest\
+
 
 
 

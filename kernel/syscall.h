@@ -35,3 +35,4 @@
 #define SYS_symlink 33
 #define SYS_mmap    34
 #define SYS_munmap  35
+#define SYS_clone  36

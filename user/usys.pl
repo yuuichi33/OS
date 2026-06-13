@@ -50,3 +50,4 @@ entry("lseek");
 entry("symlink");
 entry("mmap");
 entry("munmap");
+entry("clone");

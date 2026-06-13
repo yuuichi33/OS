@@ -56,6 +56,7 @@ int lseek(int, int, int);
 int symlink(const char*, const char*);
 void* mmap(void*, int, int, int, int, int);
 int munmap(void*, int);
+int clone(void (*fn)(void*), void *stack, void *arg);
 
 // ulib.c
 int stat(const char*, struct stat*);

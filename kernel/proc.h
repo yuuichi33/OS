@@ -125,5 +125,8 @@ struct proc {
   int alarm_running;           // 防重入锁（1：正在运行，0：未运行）
 
   struct vma vmas[16];         // VMA 数组
-
+  
+  // clone
+  int is_thread;               // 标记是否为轻量级线程 (1: 是, 0: 否)
+  int tgid;                    // 线程组 ID (Thread Group ID)
 };

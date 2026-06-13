@@ -549,3 +549,39 @@ cow_alloc(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+
+
+// 物理共享拷贝：将父进程用户空间的映射关系复制到子进程页表，指向完全相同的物理页，并递增物理页引用计数
+int
+uvmsharecopy(pagetable_t old, pagetable_t new, uint64 sz)
+{
+  pte_t *pte;
+  uint64 pa, i;
+  uint flags;
+
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walk(old, i, 0)) == 0)
+      continue; // 兼容 Lazy Allocation，跳过尚未建立物理映射的虚拟页
+    if((*pte & PTE_V) == 0)
+      continue;
+    
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+
+    // 物理引用计数增加接口
+    extern void ref_inc(uint64);
+    ref_inc(pa);
+
+    // 建立新映射，使子进程新页表项直接指向同一个物理页并保持原权限 flags
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      extern void ref_dec(uint64);
+      ref_dec(pa);
+      goto err;
+    }
+  }
+  return 0;
+
+ err:
+  uvmunmap(new, 0, i / PGSIZE, 1);
+  return -1;
+}
