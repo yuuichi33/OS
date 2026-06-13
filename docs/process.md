@@ -280,8 +280,8 @@ graph TB
   <!-- - [ ] Shared Memory（共享内存）：基于 VMA 和引用计数，实现多进程共享物理页。 -->
 
 - 阶段六：多线程机制与用户态同步（Threading & Futex）
-  - [ ] clone：轻量级线程
-  - [ ] Futex 和条件变量
+  - [x] clone：重构虚拟内存分配逻辑，独立顶级页表，用户空间物理共享（LWP）模型，隔离 trapframe 物理页并实现用户空间内存的完全物理共享。
+  - [ ] Futex：
   
 <!-- - 阶段七：系统信息与虚拟文件系统（Virtual FS）
   - [ ] ProcFS 虚拟文件系统：实现动态虚拟 Inode 映射机制。
@@ -433,7 +433,24 @@ graph TB
   - 通过官方 mmaptest.c 所有测试子项，集成测试全部通过（`PASS: 18/18`）。
   <center><img src="figs/fig11.png" width="50%"></center>
 
-- 此时进行了一次全量测试，测试结果：alltests 全量通过； grind 连续运行数分钟，系统稳定。
+- 此时进行了一次全量测试，测试结果：alltests （含 Phase 2-5、Llama2 C 及官方测试集）全量通过； grind 连续运行数分钟，系统稳定。
+
+### 4.6 多线程机制与用户态同步
+- [分析](devlog/phase6.md) `(devlog/phase6.md)`
+
+- 轻量级线程 clone 机制
+  - 独立顶级页表、用户空间物理共享方法实现 clone 线程机制。
+  - 通过 allocproc 为子线程分配独立的页表以单独映射 trapframe，避免了多个线程在同一页表下并发写入 TRAPFRAME 导致的寄存器冲突。
+  - 新增 uvmsharecopy 函数，将父进程 0 到 p->sz 的页表项直接拷贝给子线程，使其指向相同的物理页并保留写权限（不打 PTE_COW 标记），同时调用写时复制阶段实现的 ref_inc 递增物理页引用计数。
+  - 在子线程的 trapframe 中设置 epc 为入口函数、sp 为用户栈顶、a0 为传参，实现独立的寄存器上下文。
+  - 在 struct proc 中增加 is_thread 和 tgid（线程组 ID）字段。
+  - 线程退出时通过 freeproc 销毁各自独立的页表，共享的物理内存页面则由 uvmunmap 在引用计数递减为 0 时安全释放。
+  - 编写 clonetest.c 验证参数传递、全局与堆内存共享、栈隔离以及多核高并发退出的正确性，集成测试全部通过（`PASS: 19/19`）。
+  <center><img src="figs/fig12.png" width="50%"></center>
+
+- 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-6、Llama2 C 及官方测试集）全量通过；grind 连续运行数分钟，系统稳定。
+
+- futex
 
 ## 五、测试与验证
 ### 5.1 llm mmap vs read

@@ -55,6 +55,40 @@ graph TD
           - 将 trapframe->a0（第一个参数寄存器）设置为 arg。
       - 调度接入：将新线程状态置为 RUNNABLE，接入调度器。
 
+```mermaid
+flowchart TB
+    subgraph P["Parent (Thread 1)"]
+        PGT["np->pagetable"]
+        PTV["TRAPFRAME 虚拟页"]
+        PTF["Parent Trapframe"]
+        PUV["用户虚拟内存段<br/>(0 ~ p->sz)"]
+
+        PGT --> PTV
+        PTV -->|独占映射| PTF
+        PGT --> PUV
+    end
+
+    subgraph C["Child (Thread 2)"]
+        CGT["np->pagetable"]
+        CTV["TRAPFRAME 虚拟页"]
+        CTF["Child Trapframe"]
+        CUV["用户虚拟内存段<br/>(0 ~ p->sz)"]
+
+        CGT --> CTV
+        CTV -->|独占映射| CTF
+        CGT --> CUV
+    end
+
+    SHARED["共享用户物理页"]
+
+    PUV -->|共享物理页<br/>保留 PTE_W 权限| SHARED
+    CUV -->|共享物理页<br/>保留 PTE_W 权限| SHARED
+```
+
+- 顶级页表与 Trapframe 独立：每个线程在被 allocproc 分配时，都拥有自己物理独立的 np->pagetable。在这个顶级页表里，TRAPFRAME 虚拟页精准且独占地映射到它各自的 np->trapframe 物理页。这彻底消除了多核并发切换特权级时的寄存器写冲突。
+- 虚拟用户空间物理共享：实现 uvmsharecopy 函数。在 clone 时，遍历父进程的用户地址映射（0 到 p->sz），将映射关系直接复制到子线程的页表项中，保留原有的读/写/执行等权限（不标记 PTE_COW），并直接递增物理页的底层引用计数 ref_inc。
+
+
 ### futex
 
 传统的信号量或互斥锁在每次加锁/解锁时都需要陷入内核（System Call），开销较大。futex 的核心思想是：

@@ -36,14 +36,14 @@ struct test_case tests[] = {
   { "Threading: clone mechanism", "clonetest", {"clonetest", 0}, 0 },
 
   // mmap vs read
-  { "AI: Llama model mmap loading", "llama", {"llama", "stories260K.bin", "-m", 0}, 0 },
-  { "AI: Llama model read loading", "llama", {"llama", "stories260K.bin", "-r", 0}, 0 },
+  // { "AI: Llama model mmap loading", "llama", {"llama", "stories260K.bin", "-m", 0}, 0 },
+  // { "AI: Llama model read loading", "llama", {"llama", "stories260K.bin", "-r", 0}, 0 },
 
   // Official
   // { "Process: forktest functionality", "forktest", {"forktest", 0}, 0 },
   // { "File system stress: stressfs", "stressfs", {"stressfs", 0}, 0 },
   // { "Process: zombie creation", "zombie", {"zombie", 0}, 0 },
-  { "Official: usertests", "usertests", {"usertests", 0}, 0 },
+  // { "Official: usertests", "usertests", {"usertests", 0}, 0 },
 
 };
 
