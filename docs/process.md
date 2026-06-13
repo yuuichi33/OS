@@ -459,7 +459,9 @@ graph TB
   <center><img src="figs/fig13.png" width="50%"></center>
 
 - 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-6、Llama2 C、usertest）全量通过；grind 连续运行数分钟，系统稳定。
+<center><img src="figs/fig14.png" width="50%"></center>
 
+- 至此结题汇报功能实现结束
 
 ## 五、测试与验证
 ### 5.1 llm mmap vs read

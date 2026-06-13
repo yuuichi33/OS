@@ -47,6 +47,7 @@ struct test_case tests[] = {
   // { "File system stress: stressfs", "stressfs", {"stressfs", 0}, 0 },
   // { "Process: zombie creation", "zombie", {"zombie", 0}, 0 },
   { "Official: usertests", "usertests", {"usertests", 0}, 0 },
+  // { "NeverEnd: grind", "grind", {"grind", 0}, 0 },
 
 };
 
@@ -70,7 +71,6 @@ void run_test(struct test_case *tc) {
     wait(&status);
 
     // 验证状态码
-    // 注意：在xv6中，exit(x) 传入的值会被保存在 status 中
     if (tc->expected_exit_status == -1) {
       if (status == -1) {
         printf("\033[32m[PASS]\033[0m %s (Expected crash, exit status: %d)\n\n", tc->name, status);
