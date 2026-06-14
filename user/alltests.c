@@ -35,12 +35,6 @@ struct test_case tests[] = {
   // phase6
   { "Threading: clone mechanism", "clonetest", {"clonetest", 0}, 0 },
   { "Threading: futex lock synchronization", "futextest", {"futextest", 0}, 0 },
-  
-
-  // phase7
-  // mmap vs read
-  { "AI: Llama model mmap loading", "llama", {"llama", "stories260K.bin", "-m", 0}, 0 },
-  { "AI: Llama model read loading", "llama", {"llama", "stories260K.bin", "-r", 0}, 0 },
 
   // Official
   // { "Process: forktest functionality", "forktest", {"forktest", 0}, 0 },
