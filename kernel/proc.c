@@ -853,6 +853,11 @@ clone(uint64 fn, uint64 stack, uint64 arg)
   struct proc *np;
   struct proc *p = myproc();
 
+  // uint64 va;
+  // for(va = 0; va < p->sz; va += PGSIZE) {
+  //   walkaddr(p->pagetable, va); // 触发延迟页面的真实物理分配并建立映射
+  // }
+
   // 1. 分配一个独立的 PCB (这会自动在 np->pagetable 里映射独立的 np->trapframe)
   if((np = allocproc()) == 0){
     return -1;

@@ -150,14 +150,15 @@ UPROGS=\
 	$U/_llama\
 	$U/_clonetest\
     $U/_futextest\
+	$U/_bench\
 
 
 
 
 # fs.img: mkfs/mkfs README $(UPROGS)
 # 	mkfs/mkfs fs.img README $(UPROGS)
-fs.img: mkfs/mkfs README.md stories260K.bin $(UPROGS)
-	mkfs/mkfs fs.img README.md stories260K.bin $(UPROGS)
+fs.img: mkfs/mkfs README.md stories260K.bin tok512.bin $(UPROGS)
+	mkfs/mkfs fs.img README.md stories260K.bin tok512.bin $(UPROGS)
 
 -include kernel/*.d user/*.d
 
@@ -176,7 +177,7 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 	then echo "-gdb tcp::$(GDBPORT)"; \
 	else echo "-s -p $(GDBPORT)"; fi)
 ifndef CPUS
-CPUS := 3
+CPUS := 4
 endif
 
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
