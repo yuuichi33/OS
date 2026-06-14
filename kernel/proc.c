@@ -980,7 +980,7 @@ sys_futex(void)
     for(struct proc *np = proc; np < &proc[NPROC]; np++) {
       if(np != p) {
         acquire(&np->lock);
-        if(np->state == SLEEPING && np->chan == (void*)paddr) {
+        if(np->state == SLEEPING && np->chan == (void*)paddr && np->tgid == p->tgid) {
           np->state = RUNNABLE;
           woken++;
         }

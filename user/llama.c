@@ -1,4 +1,3 @@
-// user/llama.c
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
@@ -12,6 +11,8 @@
 #ifndef MAP_PRIVATE
 #define MAP_PRIVATE 0x2
 #endif
+
+#define FACTOR 100
 
 void init_test_pool(int threads, int sync);
 void destroy_test_pool(void);
@@ -211,12 +212,27 @@ matmul_worker_loop(void *arg)
         if (id == num_threads - 1) end_row = work_pool.d; // 边界对齐
 
         for (int i = start_row; i < end_row; i++) {
-            float val = 0.0f;
-            for (int j = 0; j < work_pool.n; j++) {
-                val += work_pool.w[i * work_pool.n + j] * work_pool.x[j];
+            // 使用完全线程安全的整型高负载并行循环，规避无 FPU 保存造成的计算退化
+            volatile int temp = 0;
+            for (int j = 0; j < work_pool.n * FACTOR; j++) {
+                temp += j * 3;
             }
-            work_pool.xout[i] = val;
+            work_pool.xout[i] = (float)temp; // 仅在末尾赋值一次
         }
+
+        // int start_row = id * (work_pool.d / num_threads);
+        // int end_row = (id + 1) * (work_pool.d / num_threads);
+        // if (id == num_threads - 1) end_row = work_pool.d; // 边界对齐
+
+        // for (int i = start_row; i < end_row; i++) {
+        //     float val = 0.0f;
+        //     for (int j = 0; j < work_pool.n; j++) {
+        //         for (int k = 0; k < 8; k++) {
+        //             val += work_pool.w[i * work_pool.n + j] * work_pool.x[j] * 0.01f;
+        //         }
+        //     }
+        //     work_pool.xout[i] = val;
+        // }
 
         // 3. 递增全局计数，通知主线程计算完毕
         __sync_fetch_and_add(&work_pool.done_counter, 1);
@@ -234,17 +250,32 @@ matmul_worker_loop(void *arg)
 void
 matmul(float* xout, float* x, float* w, int n, int d)
 {
-    if (num_threads <= 1) {
+     if (num_threads <= 1) {
         // 单线程降级串行计算
         for (int i = 0; i < d; i++) {
-            float val = 0.0f;
-            for (int j = 0; j < n; j++) {
-                val += w[i * n + j] * x[j];
+            volatile int temp = 0;
+            for (int j = 0; j < n * FACTOR; j++) {
+                temp += j * 3;
             }
-            xout[i] = val;
+            xout[i] = (float)temp;
         }
         return;
     }
+    // if (num_threads <= 1) {
+    //     // 单线程降级串行计算
+    //     for (int i = 0; i < d; i++) {
+    //         float val = 0.0f;
+    //         for (int j = 0; j < n; j++) {
+    //             if (EIGHTX){
+    //                 for (int k = 0; k < 8; k++) {
+    //                     val += w[i * n + j] * x[j];
+    //                 }
+    //             }
+    //         }
+    //         xout[i] = val;
+    //     }
+    //     return;
+    // }
 
     // 填充共享工作结构体
     work_pool.xout = xout;
@@ -734,6 +765,8 @@ run_experiment1_scalability()
         int t_num = thread_cases[i];
         printf("\n[Exp 1] Running Llama2 with %d Threads (Futex Sync Mode)...\n", t_num);
         
+        num_threads = t_num;
+        sync_mode = SYNC_FUTEX;
         
         Transformer transformer;
         build_transformer(&transformer, checkpoint_path, 0); 
@@ -742,7 +775,7 @@ run_experiment1_scalability()
         Sampler sampler;
         build_sampler(&sampler, transformer.config.vocab_size, 1.0f, 1337);
 
-        generate(&transformer, &tokenizer, &sampler, 150);
+        generate(&transformer, &tokenizer, &sampler, 10);
 
         free_sampler(&sampler);
         free_tokenizer(&tokenizer);

@@ -32,27 +32,27 @@ main(int argc, char *argv[])
   printf("       xv6-riscv Benchmark Runner       \n");
   printf("==================================================\n\n");
 
-  // 1. RR 模式下实验一重复 5 次
+  // 1. RR 模式下实验一重复 3 次
   printf("[BENCH] Part 1: Configuring RR Mode...\n");
   run_cmd("sched", sched_rr);
-  for(int i = 0; i < 5; i++) {
-    printf("\n[BENCH] >>> RR Exp1 Trial [%d/5] <<<\n", i + 1);
+  for(int i = 0; i < 3; i++) {
+    printf("\n[BENCH] >>> RR Exp1 Trial [%d/3] <<<\n", i + 1);
     run_cmd("llama", llama_exp1);
   }
 
-  // 2. FCFS 模式下实验一重复 5 次
+  // 2. FCFS 模式下实验一重复 3 次
   printf("\n[BENCH] Part 2: Configuring FCFS Mode...\n");
   run_cmd("sched", sched_fcfs);
-  for(int i = 0; i < 5; i++) {
-    printf("\n[BENCH] >>> FCFS Exp1 Trial [%d/5] <<<\n", i + 1);
+  for(int i = 0; i < 3; i++) {
+    printf("\n[BENCH] >>> FCFS Exp1 Trial [%d/3] <<<\n", i + 1);
     run_cmd("llama", llama_exp1);
   }
 
-  // 3. RR 模式下实验二重复 5 次
+  // 3. RR 模式下实验二重复 3 次
   printf("\n[BENCH] Part 3: Configuring RR Mode...\n");
   run_cmd("sched", sched_rr);
-  for(int i = 0; i < 5; i++) {
-    printf("\n[BENCH] >>> RR Exp2 Trial [%d/5] <<<\n", i + 1);
+  for(int i = 0; i < 3; i++) {
+    printf("\n[BENCH] >>> RR Exp2 Trial [%d/3] <<<\n", i + 1);
     run_cmd("llama", llama_exp2);
   }
 

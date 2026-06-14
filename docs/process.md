@@ -245,11 +245,12 @@ graph TB
 
 ### 2.6 开发过程中想到的其他内容
 
-- 堆内存管理目前采用 First-Fit 空闲链表方法，还有更复杂的 Buddy System 和 Slab Allocator方法
+- 堆内存管理目前采用 First-Fit 空闲链表方法，还有更复杂的 Buddy System 和 Slab Allocator 方法
 - 进程调度算法 FCFS RR (还有 SPF NP-FP 等 ) 
 - 增加图形化界面
 - 完善 libc
-- 测试指标 量化优化结果
+- ProcFS 虚拟文件系统
+- System Information
 
 ## 三、任务清单及进度规划
 
@@ -277,34 +278,23 @@ graph TB
   - [x] Lazy Allocation（按需分页）：重构 sbrk，通过捕获 13/15 号缺页中断动态分配物理页。
   - [x] Copy-On-Write Fork（写时复制）：在 kalloc 中引入物理页引用计数，在 fork 时共享只读页表，写操作时触发缺页拷贝。
   - [x] mmap/munmap：引入虚拟内存区域（VMA）管理，实现文件与匿名的内存映射。
-  <!-- - [ ] Shared Memory（共享内存）：基于 VMA 和引用计数，实现多进程共享物理页。 -->
 
 - 阶段六：多线程机制与用户态同步（Threading & Futex）
   - [x] clone：重构虚拟内存分配逻辑，独立顶级页表，用户空间物理共享（LWP）模型，隔离 trapframe 物理页并实现用户空间内存的完全物理共享。
   - [x] Futex：
-  
-<!-- - 阶段七：系统信息与虚拟文件系统（Virtual FS）
-  - [ ] ProcFS 虚拟文件系统：实现动态虚拟 Inode 映射机制。
-  - [ ] System Information：实现 /proc/meminfo 和 /proc/[pid]/status，将阶段二的 getprocs 和阶段五的 VMA 状态以虚拟文件形式直观暴露。 -->
-
-<!-- - 阶段八：测试与全量验证（Testing）
-  - [ ] 模块单元测试
-  - [ ] 集成测试与原生 usertests 压力测试
-  - [ ] 一键自动化测试框架 alltests 跑通 -->
-
 
 - 阶段七：LLM 推理引擎移植、系统级优化与量化评估（Evaluation）
   - [x] Llama 2 C 推理引擎移植：调整 xv6 磁盘参数和文件系统块大小，将 stories260K.bin 模型文件（1.04MB）写入磁盘，移植编译用户态推理程序 llama.c。
-  - [ ] 多线程矩阵乘法优化：在 llama.c 中利用 clone 机制将核心矩阵-向量乘法（GEMV）计算任务切分至多核（QEMU -smp 配置）并行计算。
-  - [ ] 同步原语替换与量化分析：在多线程推理中分别应用“用户态盲等”、“传统管道同步”与“基于 futex 的互斥锁”，测量并对比在不同 CPU 负载下的 Ticks 损耗。
-  - [ ] 存储映射与零拷贝量化评估：对比“Malloc + Read”与“Mmap + Demand Paging”两种模式下，模型加载阶段的 CPU Ticks 耗时与物理内存实际页面的分配情况。
+  - [x] 多线程矩阵乘法优化：在 llama.c 中利用 clone 机制将核心矩阵-向量乘法（GEMV）计算任务切分至多核（QEMU -smp 配置）并行计算。
+  - [x] 同步原语替换与量化分析：在多线程推理中分别应用“用户态盲等”、“传统管道同步”与“基于 futex 的互斥锁”，测量并对比在不同 CPU 负载下的 Ticks 损耗。
+  - [x] 存储映射与零拷贝量化评估：对比“Malloc + Read”与“Mmap + Demand Paging”两种模式下，模型加载阶段的 CPU Ticks 耗时与物理内存实际页面的分配情况。
+  - [x] 编写 bench.c，测试实验数据。
 
-- 阶段八：测试、可视化与结题验收（Final Stage）
-  - [ ] 动态线程状态监控器：升级用户态 ps 工具，直观展示线程组（TGID）和等待 Futex 的线程状态。
-  - [ ] 缺页中断动态追踪：在内核中加入彩色字符输出调试信息，直观展示推理过程中 mmap 的 Lazy 调页过程。
+- 阶段八：测试与结题验收（Final Stage）
   - [ ] 自动化测试集成：自编写增量单元测试 + usertests。
+  - [ ] benchmark测试：运行 bench 测试，记录数据，可视化并分析。
   - [ ] 压力测试：运行原生 grind 测试。
-  - [ ] 最终材料准备：结题报告 PDF 以及汇报 PPT，准备 10 分钟演示。
+  - [ ] 结题材料准备：结题报告 PDF 以及汇报 PPT。
 
 ### 最终验收要求
 
@@ -464,8 +454,8 @@ graph TB
 - 至此结题汇报功能实现结束
 
 ## 五、测试与验证
-### 5.1 llama.c 移植 （from run.c）
-  
+[具体内容](bench/bench.md) `(bench/bench.md)`
+
 ## 参考资料（部分）
 
 - https://github.com/mit-pdos/xv6-riscv
