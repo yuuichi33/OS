@@ -3,7 +3,7 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
 
-#define STACK_SIZE 4096
+#define STACK_SIZE 8192
 
 #ifndef PROT_READ
 #define PROT_READ 0x1
