@@ -541,29 +541,31 @@ scheduler(void)
         release(&p->lock);
       }
     } else {
-      //FCFS
+      //FCFS (Non-Preemptive)
       struct proc *first_p = 0;
+      int first_ctime = 0;
 
-      // 寻找最早创建且处于 RUNNABLE 状态的进程
+      // 第一遍：不持锁扫描，找到最早创建的 RUNNABLE 进程
       for(p = proc; p < &proc[NPROC]; p++) {
         acquire(&p->lock);
         if(p->state == RUNNABLE) {
-          if(first_p == 0 || p->ctime < first_p->ctime) {
-            if(first_p)
-              release(&first_p->lock); // 释放上一个临时选中的进程锁
+          if(first_p == 0 || p->ctime < first_ctime) {
+            first_ctime = p->ctime;
             first_p = p;
-            continue; // 保持当前最先创建进程的锁处于 acquire 状态
           }
         }
         release(&p->lock);
       }
 
-      // 运行选出的最老进程
+      // 第二遍：锁定选中的进程，验证状态后运行
       if(first_p) {
-        first_p->state = RUNNING;
-        c->proc = first_p;
-        swtch(&c->context, &first_p->context);
-        c->proc = 0;
+        acquire(&first_p->lock);
+        if(first_p->state == RUNNABLE) {
+          first_p->state = RUNNING;
+          c->proc = first_p;
+          swtch(&c->context, &first_p->context);
+          c->proc = 0;
+        }
         release(&first_p->lock);
       }
     }

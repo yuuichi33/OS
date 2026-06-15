@@ -10,6 +10,8 @@
 #include "file.h"       
 #include "fcntl.h"   
 
+// FCFS 模式下防饿死：每个 CPU 每 8 个 tick 让出一次 CPU
+static uint64 fcfs_noyield[NCPU];
 
 struct spinlock tickslock;
 uint ticks;
@@ -199,8 +201,19 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   extern int sched_mode; // FCFS NP
-  if(which_dev == 2 && sched_mode == 0)
-    yield();
+  if(which_dev == 2) {
+    if(sched_mode == 0) {
+      yield();
+    } else {
+      // FCFS: 每 8 个 tick 让出一次，防止多核飢餓死锁
+      int id = cpuid();
+      fcfs_noyield[id]++;
+      if(fcfs_noyield[id] >= 8) {
+        fcfs_noyield[id] = 0;
+        yield();
+      }
+    }
+  }
 
   usertrapret();
 }
@@ -274,8 +287,19 @@ kerneltrap()
 
   // give up the CPU if this is a timer interrupt.
   extern int sched_mode; // FCFS NP
-  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING && sched_mode == 0)
-    yield();
+  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING) {
+    if(sched_mode == 0) {
+      yield();
+    } else {
+      // FCFS: 每 8 个 tick 让出一次，防止多核飢餓死锁
+      int id = cpuid();
+      fcfs_noyield[id]++;
+      if(fcfs_noyield[id] >= 8) {
+        fcfs_noyield[id] = 0;
+        yield();
+      }
+    }
+  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.

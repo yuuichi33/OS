@@ -191,6 +191,9 @@ matmul_worker_loop(void *arg)
     int last_signal = 0;
 
     while (1) {
+        // ★ 内存屏障：确保看到其他 CPU 对 start_signal 的最新写入
+        __sync_synchronize();
+
         // 1. 同步等待主线程派发计算指令
         while (work_pool.start_signal == last_signal) {
             if (sync_mode == SYNC_FUTEX) {
@@ -283,7 +286,11 @@ matmul(float* xout, float* x, float* w, int n, int d)
     work_pool.w = w;
     work_pool.n = n;
     work_pool.d = d;
+
+    // 原子重置 done_counter + 内存屏障，防止与工作线程的 __sync_fetch_and_add 乱序
+    __sync_synchronize();
     work_pool.done_counter = 0;
+    __sync_synchronize();
 
     // 唤醒计算子线程组
     __sync_fetch_and_add(&work_pool.start_signal, 1);
@@ -711,6 +718,7 @@ init_test_pool(int threads, int sync)
     num_threads = threads;
     sync_mode = sync;
     work_pool.start_signal = 0;
+    __sync_synchronize();  // 确保 0 对其他 CPU 可见，防止新 worker 读到旧值 -1
     work_pool.done_counter = 0;
 
     if (num_threads > 1) {
@@ -736,7 +744,9 @@ void
 destroy_test_pool()
 {
     if (num_threads > 1) {
+        __sync_synchronize();
         work_pool.start_signal = -1;
+        __sync_synchronize();
         if (sync_mode == SYNC_FUTEX) {
             futex((void*)&work_pool.start_signal, FUTEX_WAKE, num_threads);
         } else if (sync_mode == SYNC_PIPE) {
