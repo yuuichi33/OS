@@ -12,6 +12,7 @@
 - **选题：方案 A：OS 内核实现**
 - **基准**：基于 **MIT xv6-riscv**（`https://github.com/mit-pdos/xv6-riscv`），代码基线回退至 2023 年 1 月前的稳定状态。
 - **目标**：在完成课程要求功能的前提下，引入部分现代 Unix/Linux 内核设计思想，拓展 xv6 内核的功能边界并验证其在真实负载下的表现。
+- **组队情况**：单人独立完成。
 - **开发环境**：
   - 宿主机：Windows 11 + VSCode (SSH 远程连接)
   - 目标机：Ubuntu 22.04 LTS 
@@ -195,9 +196,9 @@ graph TB
 - **系统调用层**：提供用户态与内核态的交互接口（共 37 个系统调用）
 - **用户空间**：运行 Shell 和应用程序
 
-### 3.2 子系统设计与实现
+### 3.3 子系统设计与实现
 
-#### 3.2.1 系统启动（Bootloader）
+#### 3.3.1 系统启动（Bootloader）
 
 - 启动流程：
 ```
@@ -220,7 +221,7 @@ $ _
 系统在 QEMU 中稳定启动并进入 Shell，启动过程可复现，无异常重启。此部分完全复用 xv6 已实现功能。
 
 
-#### 3.2.2 中断与异常处理（Trap & Interrupt）
+#### 3.3.2 中断与异常处理（Trap & Interrupt）
 
 xv6 采用**基于 Trap 的统一异常处理框架**。所有系统调用、异常和中断最终均通过 Trap 机制进入内核。RISC-V 架构中，`scause` 寄存器标识中断/异常类型：
 
@@ -250,13 +251,47 @@ xv6 采用**基于 Trap 的统一异常处理框架**。所有系统调用、异
             └── 其他 → 打印诊断信息 → setkilled(p)
   ```
 
-- 具体工作：
+- **具体工作**：
   - 修改 trap.c 中的 usertrap()，实现对非法指令（scause 2）与内存越界读写（scause 13/15）的分类识别。
   - 发生异常时，内核打印错误地址与指令并强制结束该进程（exit(-1)），保证内核和其他进程正常运行不崩溃。
 
+- **核心代码**（`kernel/trap.c`）：
+  ```c
+  void usertrap(void) {
+    // ...
+    if(r_scause() == 8){
+      // 系统调用
+      p->trapframe->epc += 4;
+      intr_on();
+      syscall();
+    } else if((which_dev = devintr()) != 0){
+      // 硬件中断 — alarm 检测
+      if(which_dev == 2 && p->alarm_interval > 0) {
+        p->alarm_ticks++;
+        if(p->alarm_ticks == p->alarm_interval) {
+          *p->alarm_tf = *p->trapframe;      // 备份现场
+          p->trapframe->epc = p->alarm_handler; // 重定向
+        }
+      }
+    } else {
+      // 用户态异常分类拦截
+      uint64 scause = r_scause();
+      uint64 stval = r_stval();
+      uint64 sepc = r_sepc();
+      if(scause == 13 || scause == 15) {
+        // 缺页处理：VMA / Lazy / COW
+        // ...
+      } else {
+        // 非法指令等 → 打印诊断 → Kill
+        printf("[Exception] Process %d killed: scause=%p\n",p->pid,scause);
+        setkilled(p);
+      }
+    }
+    if(killed(p)) exit(-1);
+  }
+  ```
 
-
-#### 3.2.3 内存管理（Memory Management）
+#### 3.3.3 内存管理（Memory Management）
 
 xv6 采用**页式内存管理**。在原有 4KB 物理页框分配器（`kalloc/kfree`）与 Sv39 页表的基础上，本项目重构并扩展了内存管理结构：
 
@@ -297,6 +332,33 @@ flowchart LR
 - 在 kmfree 中，分配器会自动检测相邻的连续空闲内存块，并将其合并为大块，防止内存碎片的过度累积。
 - 引入独立的内核自旋锁保护堆链表，确保多核并发调用下的线程安全性。
 
+- **核心代码**（`kernel/kalloc.c` — 基于 First-Fit 的内核堆分配器）：
+  ```c
+  // 内存块首部结构
+  struct kmem_header {
+    uint64 size;              // 内存块大小（不含首部）
+    struct kmem_header *next; // 空闲链表指针
+    int is_free;              // 是否空闲
+  };
+
+  void* kmalloc(uint64 size) {
+    if(size == 0) return 0;
+    size = (size + 7) & ~7;            // 8 字节对齐
+    acquire(&kmalloc_mem.lock);
+    struct kmem_header *curr = kmalloc_mem.head;
+    // 遍历空闲链表，寻找 First-Fit 块
+    while(curr) {
+      if(curr->is_free && curr->size >= size) {
+        // 拆分大块、标记占用...
+        return (void*)(curr + 1);      // 返回数据区地址
+      }
+      curr = curr->next;
+    }
+    // 无可用块，向页分配器申请新页
+    release(&kmalloc_mem.lock);
+    return add_page_to_heap();         // 扩展堆
+  }
+  ```
 
 ##### B. 按需分页（Lazy Allocation）
 
@@ -310,6 +372,26 @@ flowchart LR
 - 重构 walkaddr() 与 copyout() 等内核函数，确保当用户将尚未映射的 Lazy 内存指针作为系统调用（如 read）的目标缓冲区时，内核能透明且安全地触发物理页装载。同时，调整 uvmunmap 与 uvmcopy，在检测到未映射页时选择跳过而非发生内核 Panic。
 
 - debug 记录：最初在 usertrap 中使用 walkaddr 检测地址是否映射，但 walkaddr 已被重构为自动分配物理页，导致重复分配。解决方案：改用 walk(pagetable, va, 0) 做纯页表查询。
+
+- **核心代码**（`kernel/sysproc.c` — sys_sbrk 惰性分配）：
+  ```c
+  uint64 sys_sbrk(void) {
+    int n;
+    argint(0, &n);
+    struct proc *p = myproc();
+    uint64 addr = p->sz;
+
+    if(n < 0) {
+      // 缩减内存：立即释放物理页
+      if(growproc(n) < 0) return -1;
+    } else {
+      // 增长内存：仅抬高虚拟边界，不分配物理页
+      if(p->sz + n >= MAXVA) return -1;
+      p->sz += n;                // Lazy：只改边界
+    }
+    return addr;
+  }
+  ```
 
 ##### C. 写时复制（Copy-On-Write Fork）
 
@@ -327,6 +409,38 @@ flowchart LR
   - 内核拦截该异常，读取该物理页的引用计数：
     - 若当前物理页引用计数大于 1，则分配一页新物理页，进行数据拷贝，将新页重新映射到当前虚拟地址并赋予写权限（PTE_W），同时将原物理页的引用计数递减。
     - 若物理页引用计数等于 1，说明该物理页已由当前进程独占，此时无需进行数据拷贝，直接清除 PTE_COW 并恢复写权限（PTE_W）即可。
+
+- **核心代码**（`kernel/vm.c` — COW Fork 的 uvmcopy 与 cow_alloc）：
+  ```c
+  // fork 时：不拷贝物理页，共享页表+打 COW 标记
+  int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
+    for(i = 0; i < sz; i += PGSIZE) {
+      pa = PTE2PA(*pte);
+      flags = PTE_FLAGS(*pte);
+      if(flags & PTE_W) {
+        flags = (flags & ~PTE_W) | PTE_COW; // 清写+打标记
+        *pte = (*pte & ~PTE_W) | PTE_COW;
+      }
+      ref_inc(pa);                          // 递增引用计数
+      mappages(new, i, PGSIZE, pa, flags);  // 共享映射
+    }
+    return 0;
+  }
+
+  // 缺页时：COW 物理页分裂
+  int cow_alloc(pagetable_t pagetable, uint64 va) {
+    pte_t *pte = walk(pagetable, va0, 0);
+    if(ref_get(pa) == 1) {
+      *pte = (*pte & ~PTE_COW) | PTE_W;    // 独占：直接还原写
+    } else {
+      char *mem = kalloc();
+      memmove(mem, (char*)pa, PGSIZE);     // 拷贝新页
+      *pte = PA2PTE(mem) | PTE_W;           // 写权限映射
+      ref_dec(pa);                          // 递减老页计数
+    }
+    return 0;
+  }
+  ```
 
 
 ##### D. mmap/munmap 文件内存映射
@@ -346,8 +460,35 @@ flowchart LR
   - fork_test 报错 `panic: sched locks`，原因是 VMA 的 writei 回写操作放在了 exit() 的 acquire(&wait_lock) 之后，违反了"持锁不能睡眠"的规则。解决方案：将 VMA 释放逻辑移至 exit() 最开头。
   - 在 fork_test 中，子进程在执行 VMA 数据校验时，报错 `mismatch at 2048, wanted 'A', got 0x0`。原因是遗漏了更新文件偏移量 `v->offset`。解决方案：增加`v->offset += len;`，使文件偏移量与虚拟起点同步向后挪动。
 
+- **核心代码**（`kernel/proc.h` — VMA 结构定义 + `kernel/sysfile.c` — mmap 映射）：
+  ```c
+  // 虚拟内存区域结构（每个进程 16 个槽位）
+  struct vma {
+    int valid;          // 槽位是否被占用
+    uint64 addr;        // 映射起始虚拟地址
+    int len;            // 映射长度（字节）
+    int prot;           // 访问权限
+    int flags;          // MAP_SHARED / MAP_PRIVATE
+    struct file *f;     // 对应的文件指针
+    int offset;         // 文件起始偏移量
+  };
 
-#### 3.2.4 进程管理（Process Management）
+  // mmap：仅在 VMA 中登记，不分配物理页
+  uint64 sys_mmap(void) {
+    struct vma *v = find_free_vma(p);
+    v->valid = 1;
+    v->addr = find_available_addr(p);  // 自动分配虚拟地址
+    v->len = len;
+    v->prot = prot;
+    v->flags = flags;
+    v->f = filedup(f);                 // 递增文件引用
+    v->offset = offset;
+    return v->addr;
+  }
+  ```
+
+
+#### 3.3.4 进程管理（Process Management）
 
 ##### A. PCB 结构（struct proc）
 
@@ -379,6 +520,37 @@ flowchart TD
 - **FCFS（First-Come-First-Served）**：非抢占，进程一直运行到主动退出或阻塞。在 struct proc 中维护进程创建时间戳 ctime。调度器在每次遍历进程表时，选取状态为 RUNNABLE 且 ctime 最小的进程投入运行。
 - **动态切换**：引入全局变量 sched_mode（0 表示 RR，1 表示 FCFS），设计系统调用 sched_switch()，允许通过用户态命令动态改变全局调度模式变量 sched_mode。
 
+- **核心代码**（`kernel/proc.c` scheduler 函数）：
+  ```c
+  void scheduler(void) {
+    for(;;){
+      intr_on();
+      if(sched_mode == 0) {
+        // RR：轮转扫描，每个RUNNABLE进程运行一个时间片
+        for(p = proc; p < &proc[NPROC]; p++) {
+          if(p->state == RUNNABLE) {
+            p->state = RUNNING;
+            swtch(&c->context, &p->context);
+          }
+        }
+      } else {
+        // FCFS：选取ctime最小的RUNNABLE进程
+        struct proc *first_p = 0;
+        for(p = proc; p < &proc[NPROC]; p++) {
+          if(p->state == RUNNABLE &&
+             (first_p == 0 || p->ctime < first_p->ctime)) {
+            first_p = p;
+          }
+        }
+        if(first_p) {
+          first_p->state = RUNNING;
+          swtch(&c->context, &first_p->context);
+        }
+      }
+    }
+  }
+  ```
+
 ##### C. waitpid 机制
 
 扩展进程回收接口以支持父进程等待指定子进程退出：
@@ -386,6 +558,28 @@ flowchart TD
 - 若传入 pid > 0，内核仅查找、回收 PID 匹配的特定子进程；
 - 若传入 pid == -1，则兼容普通 wait，回收任意子进程。
 - **非阻塞支持**：支持首部选项 WNOHANG（值为 1）。当指定该选项且目标子进程尚未退出时，内核立即返回 0，避免父进程无意义的挂起等待。
+
+- **核心代码**（`kernel/proc.c` — waitpid 精准回收）：
+  ```c
+  int waitpid(int target_pid, uint64 addr, int options) {
+    for(;;) {
+      for(pp = proc; pp < &proc[NPROC]; pp++) {
+        if(pp->parent != p) continue;
+        if(target_pid > 0 && pp->pid != target_pid) continue; // 精准过滤
+
+        if(pp->state == ZOMBIE) {
+          pid = pp->pid;
+          freeproc(pp);                     // 回收子进程资源
+          // 将退出状态拷贝回用户态
+          copyout(p->pagetable, addr, (char*)&temp_xstate, sizeof(temp_xstate));
+          return pid;
+        }
+      }
+      if(options & WNOHANG) return 0;       // 非阻塞：立即返回
+      sleep(p, &wait_lock);                 // 阻塞等待
+    }
+  }
+  ```
 
 ##### D. 信号量（Semaphore）
 
@@ -406,6 +600,36 @@ flowchart TD
 
   - P 操作中：如果资源不够，调用 sleep(s, &s->lock)。
   - V 操作中：释放资源后，调用 wakeup(s) 唤醒在该地址上睡眠的进程。
+
+- **核心代码**（`kernel/sem.c`）：
+  ```c
+  struct sem {
+    struct spinlock lock;
+    int count;
+  };
+
+  // P 操作：资源不足时挂起
+  int sem_wait(uint64 sem_addr) {
+    struct sem *s = (struct sem*)sem_addr;
+    acquire(&s->lock);
+    while(s->count == 0) {
+      sleep(s, &s->lock);    // 进入睡眠等待
+    }
+    s->count--;
+    release(&s->lock);
+    return 0;
+  }
+
+  // V 操作：释放资源并唤醒等待者
+  int sem_signal(uint64 sem_addr) {
+    struct sem *s = (struct sem*)sem_addr;
+    acquire(&s->lock);
+    s->count++;
+    wakeup(s);                // 唤醒等待进程
+    release(&s->lock);
+    return 0;
+  }
+  ```
 
 - **具体工作**
   - 利用已实现的 kmalloc/kmfree 动态地管理信号量。
@@ -437,12 +661,33 @@ sigalarm 机制在内核中本质上是一种**用户态异步信号中断与恢
         → 原中断点继续执行
 ```
 
+- **核心代码**（`kernel/trap.c` — 时钟中断中的 alarm 触发 + `kernel/sysproc.c` — sigreturn）：
+  ```c
+  // usertrap() 中：时钟中断触发 alarm
+  if(which_dev == 2 && p->alarm_interval > 0 && p->alarm_running == 0) {
+    p->alarm_ticks++;
+    if(p->alarm_ticks == p->alarm_interval) {
+      p->alarm_ticks = 0;
+      *p->alarm_tf = *p->trapframe;       // 备份完整寄存器现场
+      p->trapframe->epc = p->alarm_handler; // 重定向到 handler
+      p->alarm_running = 1;                // 防重入
+    }
+  }
 
-#### 3.2.5 文件系统（File System）
+  // sigreturn：恢复备份现场，重置防重入锁
+  uint64 sys_sigreturn(void) {
+    *p->trapframe = *p->alarm_tf;          // 恢复现场
+    p->alarm_running = 0;                  // 解锁
+    return p->trapframe->a0;               // 保护 a0 寄存器
+  }
+  ```
+
+
+#### 3.3.5 文件系统（File System）
 
 xv6 使用**日志型文件系统**，主要由 Buffer Cache、Logging Layer、Inode Layer、Directory Layer 组成。
 
-##### lseek 文件定位
+##### A. lseek 文件定位
 
 - 操作系统在 struct file 中使用 off 字段记录当前文件的读写位置（偏移量）。默认的 read 和 write 会自动递增这个值。
 
@@ -451,7 +696,37 @@ xv6 使用**日志型文件系统**，主要由 Buffer Cache、Logging Layer、I
   - 引入 inode 级别的睡眠锁保护，确保多核/多进程并发访问时，文件大小 size 读取和偏移量 off 改写具有强一致性。
   - 建立边界异常防御，成功拦截并过滤非法文件描述符（fd）、非 Regular 文件类型（管道/控制台设备）以及越界负数偏移。
 
-##### Symlink 软链接
+- **核心代码**（`kernel/sysfile.c` — sys_lseek 实现）：
+  ```c
+  uint64 sys_lseek(void) {
+    struct file *f; int offset, whence;
+    argfd(0, &fd, &f);              // 获取文件描述符
+    argint(1, &offset);
+    argint(2, &whence);
+
+    if(f->type != FD_INODE)          // 仅支持普通磁盘文件
+      return -1;
+
+    ilock(f->ip);                    // inode 睡眠锁保护
+    if(whence == 0)                  // SEEK_SET
+      new_off = offset;
+    else if(whence == 1)             // SEEK_CUR
+      new_off = f->off + offset;
+    else if(whence == 2)             // SEEK_END
+      new_off = f->ip->size + offset;
+    else
+      { iunlock(f->ip); return -1; }
+
+    if(new_off < 0)                  // 负偏移非法
+      { iunlock(f->ip); return -1; }
+
+    f->off = new_off;
+    iunlock(f->ip);
+    return new_off;
+  }
+  ```
+
+##### B. Symlink 软链接
 
 - 参考：https://pdos.csail.mit.edu/6.S081/2025/labs/fs.html
 
@@ -461,7 +736,27 @@ xv6 使用**日志型文件系统**，主要由 Buffer Cache、Logging Layer、I
 
 - **死循环防御**：如果软链接形成环路（如 A -> B -> A），会导致无限递归。在递归解析过程中设计最大跳转深度检测（上限设为 10 ），一旦解析深度超过 10 层，判定为环路死锁，立即返回 -1 报错。
 
-#### 3.2.6 多线程机制（Clone）
+- **核心代码**（`kernel/sysfile.c` — sys_symlink 创建 + sys_open 递归解析）：
+  ```c
+  // 创建软链接：目标路径写入 Inode 数据块
+  uint64 sys_symlink(void) {
+    ip = create(path, T_SYMLINK, 0, 0);
+    writei(ip, 0, (uint64)target, 0, strlen(target));
+    iupdate(ip);
+    return 0;
+  }
+
+  // sys_open 中：遇到 T_SYMLINK 时递归解析（最大深度 10）
+  int depth = 0;
+  while(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
+    if(depth >= 10) return -1;       // 环路熔断
+    readi(ip, 0, (uint64)target_path, 0, ip->size);
+    ip = namei(target_path);         // 递归解析
+    depth++;
+  }
+  ```
+
+#### 3.3.6 多线程机制（Clone）
 
 轻量级进程（线程）的核心特征是：共享虚拟内存空间（页表）和文件描述符，但拥有独立的 CPU 寄存器上下文和独立的用户态栈。
 
@@ -472,6 +767,22 @@ xv6 使用**日志型文件系统**，主要由 Buffer Cache、Logging Layer、I
   - **物理页共享**：通过自定义的 uvmsharecopy() 函数，直接将父进程的页表项（除 TRAPFRAME 外）复制到子线程的页表项中，保留原有的读/写/执行等权限（不加 PTE_COW），并调用引用计数器增加对物理页的持有计数。
 
   - **生命周期协调**：在进程控制块中维护线程组 ID（tgid）以及线程属性标志。各线程在终止时释放自身持有的顶级页表，共享的物理内存空间由最后一个退出线程的进程环境（引用计数递减为 0 时）通过 uvmunmap 彻底释放。
+
+- **核心代码**（`kernel/proc.c`）：
+  ```c
+  int clone(uint64 fn, uint64 stack, uint64 arg) {
+    struct proc *np = allocproc();              // 独立 PCB + 页表
+    uvmsharecopy(p->pagetable, np->pagetable, p->sz); // 物理共享
+    *(np->trapframe) = *(p->trapframe);        // 复制寄存器
+    np->trapframe->epc = fn;                   // 入口函数
+    np->trapframe->sp = stack;                 // 独立用户栈
+    np->trapframe->a0 = arg;                   // 传参
+    np->is_thread = 1;
+    np->tgid = p->tgid;
+    np->state = RUNNABLE;
+    return np->pid;
+  }
+  ```
 
 ```mermaid
 flowchart TB
@@ -504,7 +815,7 @@ flowchart TB
 ```
 
 
-#### 3.2.7 Futex 用户态快速同步锁
+#### 3.3.7 Futex 用户态快速同步锁
 
 传统的同步方式在每次加锁/解锁时都需要陷入内核，系统调用开销相对较大。本项目基于 Linux Futex 机制的思想，实现了用户态同步互斥锁。
 
@@ -519,6 +830,49 @@ Futex（Fast Userspace Mutex）的核心思想是**无竞争时在用户态通�
   - 若由于线程切换导致数值已变化，则立即释放自旋锁并返回错误，避免在状态检查与真正睡眠之间因线程调度发生的“丢失唤醒”问题。
   - 若数值相符，则将当前线程挂起在以 `paddr` 为标识的内核等待链表上。
 - **精准唤醒**：在 FUTEX_WAKE 操作中，系统同样获取 futex_lock，并遍历等待队列，精准唤醒最多 val 个正在该 paddr 通道上睡眠的线程。
+
+- **核心代码**（`kernel/proc.c`）：
+  ```c
+  uint64 sys_futex(void) {
+    uint64 uaddr; int op, val;
+    argaddr(0, &uaddr); argint(1, &op); argint(2, &val);
+
+    // 虚拟地址 → 物理地址（作为同步Key）
+    uint64 paddr = walkaddr(p->pagetable, uaddr);
+    if(paddr == 0) return -1;
+    paddr = paddr + (uaddr % PGSIZE);
+
+    if(op == FUTEX_WAIT) {
+      acquire(&futex_lock);
+      int cur_val;
+      copyin(p->pagetable, (char*)&cur_val, uaddr, sizeof(int));
+      if(cur_val != val) {              // 值已变 → 不睡眠
+        release(&futex_lock);
+        return -2;                       // 通知用户态重试
+      }
+      acquire(&p->lock);
+      p->chan = (void*)paddr;            // 物理地址作等待通道
+      p->state = SLEEPING;
+      release(&futex_lock);
+      sched();                           // 挂起
+      p->chan = 0;
+      release(&p->lock);
+    } else if(op == FUTEX_WAKE) {
+      acquire(&futex_lock);
+      int woken = 0;
+      // 遍历进程表，唤醒 chan == paddr 的线程
+      for(struct proc *np = proc; np < &proc[NPROC]; np++) {
+        if(np->state == SLEEPING && np->chan == (void*)paddr) {
+          np->state = RUNNABLE;
+          if(++woken >= val) break;
+        }
+      }
+      release(&futex_lock);
+      return woken;
+    }
+    return -1;
+  }
+  ```
 
 
 ## 四、测试与验证
@@ -776,11 +1130,11 @@ main() → 加载模型权重 + 分词器
 
 ### 7.1 总结
 
-本项目基于 MIT xv6-riscv，在保持原有体系结构稳定性的前提下，成功扩展并实现了 16 个新增系统调用。通过引入内核字节分配器、按需分页、写时复制、VMA 存储映射、FCFS 动态调度切换、轻量级线程、Futex 同步、符号链接等多项现代操作系统关键特性，进一步拓宽了系统的实际应用边界。
+本项目**基于 MIT xv6-riscv**，在保持原有体系结构稳定性的前提下，**成功扩展并实现了 16 个新增系统调用**。通过引入内核字节分配器、按需分页、写时复制、VMA 存储映射、FCFS 动态调度切换、轻量级线程、Futex 同步、符号链接等多项现代操作系统关键特性，进一步拓宽了系统的实际应用边界。
 
-全量单元测试与压力测试均顺利通过。在此基础上，通过成功运行并测试极简大模型推理程序 llama.c 的实际运行效率，量化展示了 Futex 同步锁、mmap 冷启动零拷贝和多核心动态分配在底层架构中所展现出的性能优势。
+**全量单元测试与压力测试均顺利通过**。在此基础上，通过**成功运行并测试极简大模型推理程序 llama.c 的实际运行效率**，量化展示了 Futex 同步锁、mmap 冷启动零拷贝和多核心动态分配在底层架构中所展现出的性能优势。
 
-本项目已达到课程要求，具体工作：
+**本项目已达到课程要求**，具体工作：
 
 - 基础环境搭建：构建远程 SSH 开发环境，完成交叉编译链和 QEMU 配置，通过 usertests 基础测试验证。
 - 系统调用与异常防护：实现用户态异常分类拦截（非法指令、段错误）、getprocs 系统调用、内核动态内存分配器 kmalloc/kmfree，以及集成测试框架 alltests。
