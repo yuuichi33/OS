@@ -281,9 +281,9 @@ graph TB
 
 - 阶段六：多线程机制与用户态同步（Threading & Futex）
   - [x] clone：重构虚拟内存分配逻辑，独立顶级页表，用户空间物理共享（LWP）模型，隔离 trapframe 物理页并实现用户空间内存的完全物理共享。
-  - [x] Futex：
+  - [x] Futex：用户态快速同步锁。
 
-- 阶段七：LLM 推理引擎移植、系统级优化与量化评估（Evaluation）
+- 阶段七：LLM 推理引擎移植、性能量化评估（Evaluation）
   - [x] Llama 2 C 推理引擎移植：调整 xv6 磁盘参数和文件系统块大小，将 stories260K.bin 模型文件（1.04MB）写入磁盘，移植编译用户态推理程序 llama.c。
   - [x] 多线程矩阵乘法优化：在 llama.c 中利用 clone 机制将核心矩阵-向量乘法（GEMV）计算任务切分至多核（QEMU -smp 配置）并行计算。
   - [x] 同步原语替换与量化分析：在多线程推理中分别应用“用户态盲等”、“传统管道同步”与“基于 futex 的互斥锁”，测量并对比在不同 CPU 负载下的 Ticks 损耗。
@@ -291,9 +291,9 @@ graph TB
   - [x] 编写 bench.c，测试实验数据。
 
 - 阶段八：测试与结题验收（Final Stage）
-  - [ ] 自动化测试集成：自编写增量单元测试 + usertests。
-  - [ ] benchmark测试：运行 bench 测试，记录数据，可视化并分析。
-  - [ ] 压力测试：运行原生 grind 测试。
+  - [x] 自动化测试集成：自编写增量单元测试 + usertests。
+  - [x] benchmark测试：运行 bench 测试，记录数据并分析。
+  - [x] 压力测试：运行原生 grind 测试。
   - [ ] 结题材料准备：结题报告 PDF 以及汇报 PPT。
 
 ### 最终验收要求
@@ -423,7 +423,7 @@ graph TB
   - 通过官方 mmaptest.c 所有测试子项，集成测试全部通过（`PASS: 18/18`）。
   <center><img src="figs/fig11.png" width="50%"></center>
 
-- 此时进行了一次全量测试，测试结果：alltests （含 Phase 2-5、Llama2 C、usertest）全量通过； grind 连续运行数分钟，系统稳定。
+- 此时进行了一次全量测试，测试结果：alltests （含 Phase 2-5、usertest）全量通过； grind 连续运行数分钟，系统稳定。
 
 ### 4.6 多线程机制与用户态同步
 - [分析](devlog/phase6.md) `(devlog/phase6.md)`
@@ -438,7 +438,7 @@ graph TB
   - 编写 clonetest.c 验证参数传递、全局与堆内存共享、栈隔离以及多核高并发退出的正确性，集成测试全部通过（`PASS: 19/19`）。
   <center><img src="figs/fig12.png" width="50%"></center>
 
-- 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-5、clonetest、Llama2 C、usertest）全量通过；grind 连续运行数分钟，系统稳定。
+- 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-5、clonetest、usertest）全量通过；grind 连续运行数分钟，系统稳定。
 
 - futex 用户态快速同步锁
   - 虚拟地址物理转换作为 Key、全局锁控制睡眠锁序方法实现 futex 同步机制。
@@ -448,13 +448,33 @@ graph TB
   - 编写 futextest.c，覆盖测试锁 Fastpath、Lost Wakeup 拦截以及多核多进程高并发锁竞争。集成测试全部通过（`PASS: 20/20`）。
   <center><img src="figs/fig13.png" width="50%"></center>
 
-- 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-6、Llama2 C、usertest）全量通过；grind 连续运行数分钟，系统稳定。
+- 此时进行了一次全量测试，测试结果：alltests（含 Phase 2-6、usertest）全量通过；grind 连续运行数分钟，系统稳定。
 <center><img src="figs/fig14.png" width="50%"></center>
 
-- 至此结题汇报功能实现结束
+**至此功能实现结束**
+
+---
+
+### 4.7 LLM 推理引擎移植、性能量化评估
+
+- Llama 2 C 推理引擎移植与文件系统调整。
+- 建立常驻线程池，在初始化阶段通过 clone 系统调用一次性创建工作线程，避免频繁销毁线程带来的内核开销。
+- 采用静态划分法将矩阵行计算任务切分至多核，通过共享的 work_pool 结构体进行主从线程间的任务分发与同步。
+- 在 llama.c 中应用 mmap 映射模型文件，替代传统的 malloc + read 方式。
+- 依托进程虚拟内存惰性分配机制，在推理实际访问权重时通过缺页中断按需调入物理页，消除启动阶段的磁盘 I/O 阻塞。
+- 编写 bench.c，进行自动化实验，记录数据并分析。
+
+<center><img src="figs/figbeforebench.png" width="50%"></center>
+<center><img src="figs/figbench.png" width="50%"></center>
+
 
 ## 五、测试与验证
 [具体内容](bench/bench.md) `(bench/bench.md)`
+
+## 六、不足、总结与展望
+### 6.1 存在不足
+- 运行 bench 偶尔会有卡死现象
+- 
 
 ## 参考资料（部分）
 

@@ -1,0 +1,244 @@
+xv6 kernel is booting
+
+hart 2 starting
+hart 1 starting
+hart 3 starting
+init: starting sh
+$ bench
+
+==================================================
+       xv6-riscv Benchmark Runner       
+==================================================
+
+[BENCH] Part 1: Configuring RR Mode...
+sched: switched to RR mode
+
+[BENCH] >>> RR Exp1 Trial [1/3] <<<
+
+=== EXPERIMENT 1: Multicore Scalability (0 = RR / 1 = FCFS) ===
+
+[Exp 1] Running Llama2 with 1 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 36 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 1] Running Llama2 with 2 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 23 Ticks for 10 tokens (Average 2 Ticks/Token)
+
+[Exp 1] Running Llama2 with 4 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 20 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 1 COMPLETED ===
+
+[BENCH] >>> RR Exp1 Trial [2/3] <<<
+
+=== EXPERIMENT 1: Multicore Scalability (0 = RR / 1 = FCFS) ===
+
+[Exp 1] Running Llama2 with 1 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 39 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 1] Running Llama2 with 2 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 25 Ticks for 10 tokens (Average 2 Ticks/Token)
+
+[Exp 1] Running Llama2 with 4 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 20 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 1 COMPLETED ===
+
+[BENCH] >>> RR Exp1 Trial [3/3] <<<
+
+=== EXPERIMENT 1: Multicore Scalability (0 = RR / 1 = FCFS) ===
+
+[Exp 1] Running Llama2 with 1 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 35 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 1] Running Llama2 with 2 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 24 Ticks for 10 tokens (Average 2 Ticks/Token)
+
+[Exp 1] Running Llama2 with 4 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 20 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 1 COMPLETED ===
+
+[BENCH] Part 2: Configuring FCFS Mode...
+sched: switched to FCFS mode
+
+[BENCH] >>> FCFS Exp1 Trial [1/3] <<<
+
+=== EXPERIMENT 1: Multicore Scalability (0 = RR / 1 = FCFS) ===
+
+[Exp 1] Running Llama2 with 1 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 35 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 1] Running Llama2 with 2 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 24 Ticks for 10 tokens (Average 2 Ticks/Token)
+
+[Exp 1] Running Llama2 with 4 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 21 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 1 COMPLETED ===
+
+[BENCH] >>> FCFS Exp1 Trial [2/3] <<<
+
+=== EXPERIMENT 1: Multicore Scalability (0 = RR / 1 = FCFS) ===
+
+[Exp 1] Running Llama2 with 1 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 35 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 1] Running Llama2 with 2 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 25 Ticks for 10 tokens (Average 2 Ticks/Token)
+
+[Exp 1] Running Llama2 with 4 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 22 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 1 COMPLETED ===
+
+[BENCH] >>> FCFS Exp1 Trial [3/3] <<<
+
+=== EXPERIMENT 1: Multicore Scalability (0 = RR / 1 = FCFS) ===
+
+[Exp 1] Running Llama2 with 1 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 36 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 1] Running Llama2 with 2 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 25 Ticks for 10 tokens (Average 2 Ticks/Token)
+
+[Exp 1] Running Llama2 with 4 Threads (Futex Sync Mode)...
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 22 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 1 COMPLETED ===
+
+[BENCH] Part 3: Configuring RR Mode...
+sched: switched to RR mode
+
+[BENCH] >>> RR Exp2 Trial [1/3] <<<
+
+=== EXPERIMENT 2: Sync Primitives Comparison ===
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Spinlock (Busy-waiting)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 270 Ticks for 10 tokens (Average 27 Ticks/Token)
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Pipe (Syscall I/O)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 36 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Futex (Fast-path/Slow-path)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 20 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 2 COMPLETED ===
+
+[BENCH] >>> RR Exp2 Trial [2/3] <<<
+
+=== EXPERIMENT 2: Sync Primitives Comparison ===
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Spinlock (Busy-waiting)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 266 Ticks for 10 tokens (Average 26 Ticks/Token)
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Pipe (Syscall I/O)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 33 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Futex (Fast-path/Slow-path)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 20 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 2 COMPLETED ===
+
+[BENCH] >>> RR Exp2 Trial [3/3] <<<
+
+=== EXPERIMENT 2: Sync Primitives Comparison ===
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Spinlock (Busy-waiting)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 269 Ticks for 10 tokens (Average 26 Ticks/Token)
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Pipe (Syscall I/O)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 32 Ticks for 10 tokens (Average 3 Ticks/Token)
+
+[Exp 2] Config: 4 Threads, Sync Primitives: Futex (Fast-path/Slow-path)
+[Benchmark] Cold-start Loading Time: 0 Ticks
+Once upon a time, there was a little girl named 
+
+[Benchmark] Generation Speed: 21 Ticks for 10 tokens (Average 2 Ticks/Token)
+=== EXPERIMENT 2 COMPLETED ===
+
+[BENCH] Part 4: Running Exp3 (Cold-start test)...
+
+=== EXPERIMENT 3: Storage Mapping Cold-Start ===
+
+[Exp 3] Method: mmap (Zero-Copy Demand Paging)
+  Cold-start Loading Time: 0 Ticks
+
+[Exp 3] Method: malloc + read (Traditional)
+  Cold-start Loading Time: 21 Ticks
+=== EXPERIMENT 3 COMPLETED ===
+
+==================================================
+       ALL BENCHMARKS COMPLETED!        
+==================================================
+
+$ 
