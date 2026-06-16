@@ -149,11 +149,8 @@ UPROGS=\
 	$U/_mmaptest\
 	$U/_llama\
 	$U/_clonetest\
-    $U/_futextest\
+	$U/_futextest\
 	$U/_bench\
-
-
-
 
 # fs.img: mkfs/mkfs README $(UPROGS)
 # 	mkfs/mkfs fs.img README $(UPROGS)

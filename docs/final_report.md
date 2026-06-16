@@ -465,6 +465,34 @@ graph TB
 ## 五、测试与验证
 [具体内容](bench/bench.md) `(bench/bench.md)`
 
+## 六、总结与展望
+
+### 6.1 总结
+
+本项目基于 MIT xv6-riscv，在保持原有体系结构稳定性的前提下，实现调度器、同步机制、文件系统及系统调用等核心功能增强。完成 Lazy Allocation、Copy-On-Write Fork、mmap、多线程与 Futex 等现代操作系统关键机制，并经过 alltests 全量集成测试（包括增量功能单元测试与 xv6 usertests）和 grind 压力测试验证，系统运行稳定。
+
+本项目达到课程要求，具体工作：
+
+- 基础环境搭建：构建远程 SSH 开发环境，完成交叉编译链和 QEMU 配置，通过 usertests 基础测试验证。
+- 系统调用与异常防护：实现用户态异常分类拦截（非法指令、段错误）、`getprocs` 系统调用、内核动态内存分配器 `kmalloc/kmfree`，以及集成测试框架 `alltests`。
+- 核心进程管理：实现 FCFS 与 RR 调度切换、`waitpid` 精准进程回收、基于 `sleep/wakeup` 的信号量机制，以及基于时钟中断的 `alarm` 异步事件通知。
+- 文件系统增强：实现 `lseek` 文件定位和 `symlink` 软链接。
+- 进阶虚拟内存管理：实现 Lazy Allocation（按需分页）、Copy-On-Write Fork（写时复制）以及 mmap/munmap（文件内存映射）。
+- 多线程与用户态同步：基于独立页表+物理共享的 clone 轻量级线程模型，以及 futex 用户态快速同步锁。
+- 简单的 LLM 推理引擎移植与性能评估：将 llama2.c 移植到 xv6，通过三个基准实验量化评估多核可扩展性、同步原语效率以及存储映射性能。
+
+
+### 6.2 展望
+
+- 当前 kmalloc/kfree 基于 First-Fit 算法，可进一步实现更高效的 Buddy System 或 Slab Allocator。
+- 实现多核负载均衡，改进 FCFS 调度器，引入每个核心的本地就绪队列，减少全局锁竞争。
+- 实现 ProcFS 虚拟文件系统。
+- 进一步分析并定位导致实验程序偶发性卡死原因，优化。
+- 增加更多进程调度算法。
+- 完善 libc。
+- 增加图形化界面。
+- ......
+
 
 ## 参考资料（部分）
 
