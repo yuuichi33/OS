@@ -4,14 +4,13 @@
 
 - 姓名：袁善
 - 学号：20231072030
-- 邮箱：shanyuan.dlut@gmail.com
 - 日期：2026年6月6日
 
 ## 一、项目摘要
 - **课设选题：方案 A：OS 内核实现**
 - **基准**：基于 **MIT xv6-riscv**`(https://github.com/mit-pdos/xv6-riscv)`，代码基线回退至 2023 年 1 月前的稳定状态。
 - **目标**：在完成课程要求功能的前提下，引入部分现代 Unix/Linux 内核设计思想，提高系统的完整性与可扩展性。
-- **开发模式**：采用 Windows (VSCode) + 远程连接 (SSH) + 虚拟机 (Ubuntu 22.04) + 模拟器 (QEMU) 开发架构。
+- **开发环境**：采用 Windows (VSCode) + 远程连接 (SSH) + 虚拟机 (Ubuntu 22.04) + 模拟器 (QEMU) 开发架构。
 - **仓库地址**：`https://github.com/yuuichi33/OS`。
 - **交付物**：可运行源代码 + 技术文档 + 结题报告PDF + 汇报PPT （对照结题验收说明）
 
@@ -354,7 +353,7 @@ graph TB
 - FCFS 调度器
   - 创建 ctime 时间戳，在 proc.c 的 scheduler() 中实现 FCFS 策略，调度时选取 ctime 最小（最早创建）的就绪进程。
   - 修改 trap.c 实现非抢占的 FCFS。
-  - 新增 sched_switch 系统调用和 sche` 命令，支持切换调度模式。
+  - 新增 sched_switch 系统调用和 sche 命令，支持切换调度模式。
   - 编写 schedtest 并接入 alltests。FCFS 模式下子进程完全顺序执行；RR 模式下子进程交替并发（打印交错）。测试结果全量通过（`PASS: 10/10`）。
   <center><img src="figs/fig3.png" width="50%"></center>
 

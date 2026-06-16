@@ -69,5 +69,5 @@
 在 fork_test 中，子进程在执行 VMA 数据校验时，报错 `mismatch at 2048, wanted 'A', got 0x0`。
 <center><img src="figs/fig0112.png" width="50%"></center>
 
-- 原因分析：测试程序通过 `munmap(p1, PGSIZE)` 释放了 2 页 VMA 映射区中的第 1 个页面。内核在 sys_munmap 处理从 VMA 起点开始的部分解映射时，虽然正确向后挪动了虚拟起点（`v->addr += len`）并缩减了长度（`v->len -= len`），但遗漏了更新文件偏移量 `v->offset`。失败。
+- 原因分析：测试程序通过 `munmap(p1, PGSIZE)` 释放了 2 页 VMA 映射区中的第 1 个页面。内核在 sys_munmap 处理从 VMA 起点开始的部分解映射时，虽然正确向后挪动了虚拟起点（`v->addr += len`）并缩减了长度（`v->len -= len`），但遗漏了更新文件偏移量 `v->offset`。
 - 解决方法：增加`v->offset += len;`，使文件偏移量与虚拟起点同步向后挪动。
