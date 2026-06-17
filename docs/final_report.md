@@ -20,7 +20,7 @@
   - 模拟器：QEMU 7.2.0（`qemu-system-riscv64`）
 - **工作概述**
   - **功能实现**：共支持 37 个系统调用（其中增量实现 16 个）。包括内核级堆分配器（kmalloc/kfree）、按需分页（Lazy Allocation）、写时复制（COW Fork）、文件内存映射（mmap/munmap）、FCFS 与 RR 动态调度切换、轻量级线程（clone）、用户态快速同步互斥体（futex）以及信号量、异步定时器（Alarm）、软链接（Symlink）等模块。
-  - **功能验证**：系统通过增量的 20 项单元测试、xv6 原生 usertests 集成测试，在 grind 压力测试下持续运行，未发生内核 Panic 或死锁。
+  - **功能验证**：系统通过增量的 20 项单元测试、xv6 原生 usertests 集成测试，在 grind 压力测试下持续运行，未发生内核 Panic 或死锁。**达到课程标准。**
   - **性能评估**：移植极简 Transformer 推理引擎 llama.c 并加载 stories260K 模型，针对多核并行能力、同步原语效率（Spinlock vs Pipe vs Futex）及存储映射机制（read vs mmap）设计对比实验，量化评估内核相关子系统的实际开销。
 
 ```mermaid
@@ -102,6 +102,9 @@ graph TB
 - **项目仓库地址**：`https://github.com/yuuichi33/OS`
 
 ### 2.1 功能实现
+
+本项目共支持 **37 个系统调用**，其中 21 个为原生系统调用，16 个为本项目增量设计与实现。
+
 | 模块 | xv6 已实现功能 | 本项目扩展实现 | 
 |:---------|:------------|:--------------|
 | 系统启动 | M→S 态切换、内核加载、栈初始化、启动日志 | — |
@@ -118,32 +121,13 @@ graph TB
 - 结题报告PDF，内容包括项目概述，技术方案，详细实现，系统运行功能测试，创新点，总结与展望等内容。
 - 汇报PPT、可运行源码及文档。
 
-### 2.3 系统调用清单
-
-本项目共支持 **37 个系统调用**（其中 21 个为原生系统调用，16 个为本项目增量设计与实现）：
-
-```
-# 原生系统调用（21 个）
-SYS_fork    SYS_exit    SYS_wait    SYS_pipe    SYS_read
-SYS_kill    SYS_exec    SYS_fstat   SYS_chdir   SYS_dup
-SYS_getpid  SYS_sbrk    SYS_sleep   SYS_uptime  SYS_open
-SYS_write   SYS_mknod   SYS_unlink  SYS_link    SYS_mkdir
-SYS_close
-
-# 扩展系统调用（16 个）
-SYS_getprocs    SYS_kmalloctest  SYS_sched_switch  SYS_waitpid
-SYS_sem_alloc   SYS_sem_free     SYS_sem_wait      SYS_sem_signal
-SYS_sigalarm    SYS_sigreturn    SYS_lseek          SYS_symlink
-SYS_mmap        SYS_munmap       SYS_clone          SYS_futex
-```
-
 ## 三、项目内容
 
 ### 3.1 系统设计目标与技术选型
 
 xv6 是一个面向教学的 Unix 风格操作系统，其代码结构清晰、模块划分合理，完整实现了进程管理、虚拟内存管理、文件系统、系统调用和异常处理等核心机制。
 
-本项目**基于 riscv 架构的 xv6** `(https://github.com/mit-pdos/xv6-riscv)`进行增量式开发，重点参考 Linux 和开源项目 Re-XVapor `(https://github.com/sandyyyz/Re-XVapor)` 以及 MIT 6.S081。项目拟在保持 xv6 原有体系结构稳定性的前提下，逐步扩展其功能，实现课程设计要求的操作系统关键机制，并在此基础上引入部分现代 Unix/Linux 内核设计思想，提高系统的完整性与可扩展性。
+本项目**基于 riscv 架构的 xv6** `(https://github.com/mit-pdos/xv6-riscv)`进行增量式开发，重点参考 Linux 和开源项目 Re-XVapor `(https://github.com/sandyyyz/Re-XVapor)` 以及 MIT 6.S081。项目拟在保持 xv6 原有体系结构稳定性的前提下，逐步扩展其功能，实现课程设计要求的操作系统关键机制，并在此基础上**引入部分现代 Unix/Linux 内核设计思想**，提高系统的完整性与可扩展性。
 
 选择 RISC-V 处理器架构 与 xv6 内核 作为开发基准，其**决策依据**如下：
 - **RISC-V 架构指令设计简洁**：规避了 x86 繁重的历史兼容包袱，RV64 寄存器与控制状态寄存器（CSRs）设计清晰，极大简化了上下文切换与 Trap 处理的汇编实现。
@@ -932,7 +916,7 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练好的�
     - Spinlock：空转等待 start_signal 变化，不做系统调用但浪费 CPU
     - Pipe：通过 read()/write() 系统调用在管道上阻塞/唤醒，每次同步都陷入内核
     - Futex：无竞争时用户态快速返回，有竞争时通过 futex_wait/futex_wake 挂起/唤醒
-  - **用 open/read/stat/close 替代 fopen/fread/ftell/fclose。**模型加载支持两种方式：
+  - **用 open/read/stat/close 替代 fopen/fread/ftell/fclose**。模型加载支持两种方式：
     - mmap：通过内存映射，零拷贝按需加载
     - malloc + read：先申请内存，再从磁盘读到用户缓冲区
 
@@ -1080,7 +1064,12 @@ main() → 加载模型权重 + 分词器
 
 本项目**基于 MIT xv6-riscv**，在保持原有体系结构稳定性的前提下，**成功扩展并实现了 16 个新增系统调用**。通过引入内核字节分配器、按需分页、写时复制、VMA 存储映射、FCFS 动态调度切换、轻量级线程、Futex 同步、符号链接等多项现代操作系统关键特性，进一步拓宽了系统的实际应用边界。
 
-**全量单元测试与压力测试均顺利通过**。在此基础上，通过**成功运行并测试极简大模型推理程序 llama.c 的实际运行效率**，量化展示了 Futex 同步锁、mmap 冷启动零拷贝和多核心动态分配在底层架构中所展现出的性能优势。
+**全量测试结果**：alltests 集成测试 **PASS: 21/21**；grind 压力测试持续运行数十分钟，**系统稳定，未发生内核 Panic 或死锁**。
+
+通过移植 LLM 推理引擎 llama.c 并设计三组对比实验，本项目进一步量化验证了：
+- **多核并行能力**：RR 调度下 1→4 线程加速比达 1.84×。
+- **Futex 同步优势**：相比 Spinlock 快 92.4%，相比 Pipe 快 40%。
+- **mmap 零拷贝优势**：冷启动耗时 0 Ticks，对比 malloc+read 的 21 Ticks。
 
 **本项目已达到课程要求**，具体工作：
 
