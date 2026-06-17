@@ -490,31 +490,7 @@ flowchart LR
 
 #### 3.3.4 进程管理（Process Management）
 
-##### A. PCB 结构（struct proc）
-
-**进程状态机：**
-```mermaid
-flowchart TD
-    UNUSED["UNUSED"]
-    USED["USED"]
-    RUNNABLE["RUNNABLE"]
-    RUNNING["RUNNING"]
-    SLEEPING["SLEEPING"]
-    ZOMBIE["ZOMBIE"]
-
-    UNUSED -->|"allocproc()"| USED
-    USED -->|"state = RUNNABLE"| RUNNABLE
-    
-    %% 中间状态转换
-    RUNNABLE -->|"sched()"| RUNNING
-    SLEEPING -->|"wakeup()"| RUNNABLE
-    RUNNABLE -->|"yield()"| SLEEPING
-    
-    RUNNING -->|"exit()"| ZOMBIE
-    ZOMBIE -->|"parent wait() -> UNUSED"| UNUSED
-```
-
-##### B. FCFS + RR 调度器
+##### A. FCFS + RR 调度器
 
 - **RR（Round-Robin）**：时间片轮转，每次时钟中断（which_dev == 2）都会调用 yield() 让出 CPU。
 - **FCFS（First-Come-First-Served）**：非抢占，进程一直运行到主动退出或阻塞。在 struct proc 中维护进程创建时间戳 ctime。调度器在每次遍历进程表时，选取状态为 RUNNABLE 且 ctime 最小的进程投入运行。
@@ -551,7 +527,7 @@ flowchart TD
   }
   ```
 
-##### C. waitpid 机制
+##### B. waitpid 机制
 
 扩展进程回收接口以支持父进程等待指定子进程退出：
 
@@ -581,7 +557,7 @@ flowchart TD
   }
   ```
 
-##### D. 信号量（Semaphore）
+##### C. 信号量（Semaphore）
 
 - **信号量（Semaphore）的机制与原理**
   - 同步机制，本质上是一个受保护的整型变量 count，配合一个自旋锁 lock，用来控制多个进程对共享资源的访问。
@@ -637,7 +613,7 @@ flowchart TD
     - 动态分配 (sem_alloc)与动态释放 (sem_free)：利用 kmalloc() 动态申请信号量结构体，并将 64 位内核指针句柄传回用户态；释放时通过 kmfree() 彻底回收内存归还给堆。
     - P/V 操作：采用信号量自身的内存地址作为 xv6 sleep/wakeup 的共享通道。P 操作（sem_wait）在资源不足时将进程挂起，V 操作（sem_signal）在释放资源时精准唤醒通道上的等待进程。
 
-##### E. Alarm 异步定时器
+##### D. Alarm 异步定时器
 
 - 参考：https://pdos.csail.mit.edu/6.S081/2025/labs/traps.html
 
@@ -921,37 +897,9 @@ flowchart TD
 
 本项目设计了 alltests 集成测试框架，用于统一调度与运行增量的功能测试。测试项涵盖以下几个方面：
 
-- crash_test.c：非法指令拦截、越界地址读取、越界地址写入、只读区域保护、内核异常隔离。
-- ps.c：系统调用异常防御、进程状态边界映射、越界状态安全防护。
-- kmalloctest.c：接口错误检测、内核堆功能验证、跨页大内存测试。
-- sched.c：命令行参数完整性检验、调度模式合法性过滤。
-- schedtest.c：先来先服务（FCFS）非抢占功能验证、时间片轮转（RR）并发抢占、时间戳顺序选取验证。
-- waitpidtest.c：验证非阻塞（WNOHANG）、验证精准 PID 阻塞回收、通配符（-1）回收、退出状态码（Exit Status）回写。
-- semtest.c：空指针/无效句柄防御、无需睡眠的即时获取、无需唤醒的即时释放、动态堆内存泄漏测试。
-- alarmtest.c 
-  - 参考 https://github.com/mit-pdos/xv6-riscv-fall19/blob/xv6-riscv-fall19/user/alarmtest.c
-  - 官方的 alarmtest.c 包含了三个递进的严格测试：
-    - test0：验证基础拦截与控制流跳转
-    - test1：验证寄存器完整性
-    - test2：验证重入锁保护（防嵌套中断）
-- lseektest.c：测试非法 fd、测试非 Regular 文件（如 stdin）、测试非法 whence、测试计算后为负数的偏移量；分别精确写入、定位、并读取校对 SEEK_SET、SEEK_CUR 和 SEEK_END 三种定位效果。
-- symlinktest.c
-  - 参考：https://github.com/mit-pdos/xv6-riscv-fall19/blob/xv6-riscv-fall19/user/symlinktest.c
-  - 软链接创建与类型校验、路径透明解析与读写、断头链接防御、环路死锁自动熔断、多级链条递归追踪、高并发多核压力测试。
-- lazytests.c
-  - 参考：https://github.com/mit-pdos/xv6-riscv-fall19/blob/lazy/user/lazytests.c
-  - 基础延迟分配（lazy alloc）、延迟页面释放（lazy unmap）、物理内存耗尽（out of memory）。
-- cowtest.c
-  - 参考：https://github.com/mit-pdos/xv6-riscv-fall19/blob/xv6-riscv-fall19/user/cowtest.c
-  - 内存压力测试（simpletest）、三进程并发写入测试（threetest）、系统调用写安全测试（filetest）。
-- mmaptest.c
-  - 参考：https://github.com/mit-pdos/xv6-riscv-fall19/blob/xv6-riscv-fall19/user/mmaptest.c
-  - 基础映射与解映射测试（mmap_test）、父子进程页表隔离测试（fork_test）。
-- clonetest.c：基础传参验证、物理内存共享验证、栈隔离验证、多核生命周期压力测试。
-- futextest.c：原子 Fastpath 测试、Lost Wakeup 防御测试、Slowpath 互斥同步测试、多核心多线程并发锁竞争压力。
+- 功能测试：crash_test.c、ps.c、 kmalloctest.c、sched.c、schedtest.c、waitpidtest.c、semtest.c、alarmtest.c、symlinktest.c、lazytests.c、cowtest.c、 mmaptest.c、clonetest.c、futextest.c。
 
-- usertests.c：
-  - xv6 官方综合测试集，覆盖：
+- xv6 官方综合测试集 usertests.c ，覆盖：
     - 系统调用参数合法性：非法用户指针、越界地址、超长字符串
     - 进程与内存管理：fork、wait、exit、kill、sbrk
     - 文件系统功能：文件创建、删除、读写、链接、目录操作
@@ -979,12 +927,12 @@ flowchart TD
 llama.c 是一个极简的 Transformer 推理程序。它加载预训练好的模型权重，根据提示词逐个生成后续的 Token。每次生成一个 Token，都要做一次完整的神经网络前向计算：把当前 Token 的向量表示经过多层 Transformer 层的矩阵运算和注意力计算，得到下一个 Token 的概率分布，再从中采样出一个 Token 输出。
 
 原版 run.c 依赖 Linux 的数学库、OpenMP 多线程（#pragma omp parallel for）和标准文件 I/O（fopen/fread）。由于 xv6 的用户态不提供这些，本项目做了**以下三方面的移植**：
-  - **数学函数**：Transformer 推理需要 `exp`、`sqrt`、`sin`、`cos`、`pow` 等数学函数做注意力机制中的 RoPE 旋转位置编码和 Softmax 归一化。xv6 没有 `<math.h>`，因此用数值方法手写这些函数。
-  - **静态线程池**：通过 `clone` 系统调用构建静态工作线程池，替代原版依赖的 OpenMP 实现。为对比同步开销，实现三种同步机制：
-    - Spinlock：空转等待 `start_signal` 变化，不做系统调用但浪费 CPU
-    - Pipe：通过 `read()`/`write()` 系统调用在管道上阻塞/唤醒，每次同步都陷入内核
-    - Futex：无竞争时用户态快速返回，有竞争时通过 `futex_wait`/`futex_wake` 挂起/唤醒
-  - **用 `open`/`read`/`stat`/`close` 替代 `fopen`/`fread`/`ftell`/`fclose`。**模型加载支持两种方式：
+  - **数学函数**：Transformer 推理需要 exp、sqrt、sin、cos、pow 等数学函数做注意力机制中的 RoPE 旋转位置编码和 Softmax 归一化。xv6 没有 `<math.h>`，因此用数值方法手写这些函数。
+  - **静态线程池**：通过 clone 系统调用构建静态工作线程池，替代原版依赖的 OpenMP 实现。为对比同步开销，实现三种同步机制：
+    - Spinlock：空转等待 start_signal 变化，不做系统调用但浪费 CPU
+    - Pipe：通过 read()/write() 系统调用在管道上阻塞/唤醒，每次同步都陷入内核
+    - Futex：无竞争时用户态快速返回，有竞争时通过 futex_wait/futex_wake 挂起/唤醒
+  - **用 open/read/stat/close 替代 fopen/fread/ftell/fclose。**模型加载支持两种方式：
     - mmap：通过内存映射，零拷贝按需加载
     - malloc + read：先申请内存，再从磁盘读到用户缓冲区
 
@@ -1004,22 +952,22 @@ main() → 加载模型权重 + 分词器
            3. destroy_test_pool()   // 回收工作线程
 ```
 
-其中 `forward()` 是最核心的函数，对每一层 Transformer 依次执行：
-- 7 次 `matmul()`（查询 Q、键 K、值 V、输出 O、前馈网络 w1/w2/w3）
+其中 forward() 是最核心的函数，对每一层 Transformer 依次执行：
+- 7 次 matmul()（查询 Q、键 K、值 V、输出 O、前馈网络 w1/w2/w3）
 - RoPE 旋转位置编码
 - Self-Attention（多头注意力计算）
 - 残差连接 + RMS 归一化
 - SiLU 激活函数
 
-**`matmul()` 是整个程序的计算瓶颈**（占 >90% 的时间），它计算的是 $\text{xout} = W \times x$——用一个大矩阵 $W$（权重）乘一个向量 $x$（当前激活值），结果是一个新向量 $\text{xout}$。**矩阵的每一行可以独立计算，适合并行化。**
+**matmul() 是整个程序的计算瓶颈**（占 >90% 的时间），它计算的是 $\text{xout} = W \times x$——用一个大矩阵 $W$（权重）乘一个向量 $x$（当前激活值），结果是一个新向量 $\text{xout}$。**矩阵的每一行可以独立计算，适合并行化。**
 
 
 ### 5.2 实验一：多核可扩展性实验
 
-- **实验目的**：验证多线程并行计算能否有效加速推理。把 `matmul()` 中的矩阵行切分到多个核心上并发执行，观察随着线程数增加，生成 Token 的速度能提升多少。
+- **实验目的**：验证多线程并行计算能否有效加速推理。把 matmul() 中的矩阵行切分到多个核心上并发执行，观察随着线程数增加，生成 Token 的速度能提升多少。
 
 - **实验设计**：
-  - QEMU 配置物理 4 核心（`-smp 4`），并发工作线程数分别设置为 1、2、4。
+  - QEMU 配置物理 4 核心（-smp 4），并发工作线程数分别设置为 1、2、4。
   - 使用 Futex 作为基础同步机制，在 RR（轮转）与 FCFS（先来先服务）两种调度策略下分别测试 3 轮，每轮推理生成 10 个 Token，记录消耗的系统 Ticks（时钟中断次数）并求取均值。
   - 由于所采用的 stories260K 模型隐藏层维度仅为 64，单次矩阵运算的物理耗时远小于 sys_futex 的内核陷入与上下文切换开销，导致无法显现并行优势。本实验在 matmul 算子最内层循环中引入**计算密度放大因子**（FACTOR = 100），通过增大单次任务的算术强度，评估该系统的性能。
 
@@ -1077,8 +1025,8 @@ main() → 加载模型权重 + 分词器
 
     | 加载方式 | I/O 机制 | 冷启动耗时 |
     | :--- | :--- | ---: |
-    | `malloc + read` | 用户堆空间申请 + 阻塞式磁盘读取 + 内核/用户态双重拷贝 | **21 Ticks** |
-    | `mmap` | 仅页表虚拟 VMA 建立 + 后续读写触发按需缺页调入（零拷贝） | **0 Ticks** |
+    | malloc + read | 用户堆空间申请 + 阻塞式磁盘读取 + 内核/用户态双重拷贝 | **21 Ticks** |
+    | mmap | 仅页表虚拟 VMA 建立 + 后续读写触发按需缺页调入（零拷贝） | **0 Ticks** |
 
 - **数据分析**
   - 在 malloc + read 模式下，系统在执行计算前必须完整经历磁盘读操作、文件缓冲到进程空间的双重拷贝，冷启动耗时达到了 21 Ticks。在此期间，CPU 需阻塞等待磁盘控制器响应。
@@ -1093,7 +1041,7 @@ main() → 加载模型权重 + 分词器
 3. 切换回 RR 调度，运行 Exp2（同步机制对比），重复 3 轮
 4. 运行 Exp3（冷启动对比），1 轮
 
-每个实验通过 `fork()` + `exec()` 调用 `llama` 程序并传入对应参数（`exp1`、`exp2`、`exp3`），父进程 `wait()` 等待子进程完成后收集结果。调度模式的切换通过 `sched` 程序完成：`sched 0` 切到 RR，`sched 1` 切到 FCFS。
+每个实验通过 fork() + exec() 调用 llama 程序并传入对应参数（exp1、exp2、exp3），父进程 wait() 等待子进程完成后收集结果。调度模式的切换通过 sched程序完成：sched 0 切到 RR，sched 1 切到 FCFS。
 
 运行 bench.c 程序结果如图。
 
@@ -1103,7 +1051,7 @@ main() → 加载模型权重 + 分词器
 
 通过三个实验，本项目对 xv6 系统在以下维度上做了量化评估：
 
-1. **多核并行计算能力**：1→2→4 线程的加速比分别为 1.53× 和 1.84×（RR 模式），证明 xv6 的多核调度和 `clone` 线程机制能有效利用多核心。但受限于串行部分（Amdahl 定律），4 线程未能达到 4× 的线性加速。
+1. **多核并行计算能力**：1→2→4 线程的加速比分别为 1.53× 和 1.84×（RR 模式），证明 xv6 的多核调度和 clone 线程机制能有效利用多核心。但受限于串行部分（Amdahl 定律），4 线程未能达到 4× 的线性加速。
 
 2. **同步原语的效率差异**：Spinlock 因为 CPU 空转几乎无法用于实际负载（268.3 Ticks）；Pipe 通过内核阻塞大幅改善（33.7 Ticks）；Futex 利用 Fast-path/Slow-path 设计在无竞争时避免系统调用，达到最优（20.3 Ticks），比 Pipe 再快 40%。
 
@@ -1115,7 +1063,7 @@ main() → 加载模型权重 + 分词器
 
 ### 1. 完整的内存管理层次
 
-本系统的内存子系统在 Sv39 页表及物理页框分配器的基础上，自下而上构建了结构完整、层次分明的虚拟内存体系：物理页分配器（`kalloc`）→ 内核堆分配器（`kmalloc`）→ 虚拟内存（Sv39 页表）→ 按需分页（Lazy）→ 写时复制（COW）→ 文件内存映射（mmap）。
+本系统的内存子系统在 Sv39 页表及物理页框分配器的基础上，自下而上构建了结构完整、层次分明的虚拟内存体系：物理页分配器（kalloc）→ 内核堆分配器（kmalloc）→ 虚拟内存（Sv39 页表）→ 按需分页（Lazy）→ 写时复制（COW）→ 文件内存映射（mmap）。
 
 ### 2. 轻量级线程与用户态快速同步
 
@@ -1146,7 +1094,7 @@ main() → 加载模型权重 + 分词器
 
 ### 7.2 存在不足
 
-- bench 偶发卡死：虽然系统能够稳定运行 alltests 和 grind 压力测试，但在少数情况下，运行 bench 实验时系统仍有偶发的卡死现象，初步分析可能与线程池销毁阶段 `destroy_test_pool()` 中的 `wait()` 回收时序有关。
+- bench 偶发卡死：虽然系统能够稳定运行 alltests 和 grind 压力测试，但在少数情况下，运行 bench 实验时系统仍有偶发的卡死现象，初步分析可能与线程池销毁阶段 destroy_test_pool() 中的 wait() 回收时序有关。
 - FCFS 多核公平性：当前多核同时扫描全局进程表选取最早进程，可能导致同一进程被多核争抢。
 - mmap 不支持 MAP_ANONYMOUS：仅支持基于文件的映射，不支持匿名映射。
 
