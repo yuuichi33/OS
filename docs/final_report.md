@@ -403,16 +403,23 @@ void kmfree(void *addr) {
 ```c
 // sys_sbrk：增长时仅抬高虚拟边界，不分配物理页
 uint64 sys_sbrk(void) {
-  int n; argint(0, &n);
+  uint64 addr;
+  int n;
   struct proc *p = myproc();
-  uint64 addr = p->sz;
+
+  argint(0, &n);
+  addr = p->sz;
 
   if(n < 0) {
-    // 缩减内存：立即释放物理页
-    if(growproc(n) < 0) return -1;
+    if(-n > p->sz)
+      return -1;
+    // 内存缩减：必须立即调用 growproc 释放物理页
+    if(growproc(n) < 0)
+      return -1;
   } else {
-    // 增长内存：Lazy 仅抬高边界
-    if(p->sz + n >= MAXVA) return -1;
+    // 延迟分配：只向上增长虚拟边界 sz，不分配物理页
+    if(p->sz + n >= MAXVA || p->sz + n < p->sz)
+      return -1;
     p->sz += n;
   }
   return addr;
@@ -421,12 +428,18 @@ uint64 sys_sbrk(void) {
 // usertrap 中：缺页异常动态装载
 if(scause == 13 || scause == 15) {
   uint64 va = PGROUNDDOWN(r_stval());
-  if(va < p->sz) {                       // 合法性校验
-    char *mem = kalloc();                // 分配物理页
-    memset(mem, 0, PGSIZE);
-    mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U);
+  if(r_stval() < PGROUNDUP(p->sz)) {       // 合法性校验（含页内偏移）
+    char *mem = kalloc();                   // 分配物理页
+    if(mem == 0) { setkilled(p); }
+    else {
+      memset(mem, 0, PGSIZE);
+      if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_U) < 0) {
+        kfree(mem);
+        setkilled(p);
+      }
+    }
   } else {
-    setkilled(p);                        // 非法越界地址，结束进程
+    setkilled(p);                           // 非法越界地址，结束进程
   }
 }
 ```
@@ -441,9 +454,29 @@ struct {
   char counts[PHYSTOP / PGSIZE];       // 物理页引用计数数组
 } page_ref;
 
-void ref_inc(uint64 pa) { acquire(&page_ref.lock); page_ref.counts[pa / PGSIZE]++; release(&page_ref.lock); }
-void ref_dec(uint64 pa) { acquire(&page_ref.lock); page_ref.counts[pa / PGSIZE]--; release(&page_ref.lock); }
-int ref_get(uint64 pa)  { acquire(&page_ref.lock); int c = page_ref.counts[pa / PGSIZE]; release(&page_ref.lock); return c; }
+void ref_inc(uint64 pa) {
+  if(pa < (uint64)end || pa >= PHYSTOP)
+    return;
+  acquire(&page_ref.lock);
+  page_ref.counts[pa / PGSIZE]++;
+  release(&page_ref.lock);
+}
+void ref_dec(uint64 pa) {
+  if(pa < (uint64)end || pa >= PHYSTOP)
+    return;
+  acquire(&page_ref.lock);
+  page_ref.counts[pa / PGSIZE]--;
+  release(&page_ref.lock);
+}
+int ref_get(uint64 pa) {
+  if(pa < (uint64)end || pa >= PHYSTOP)
+    return 0;
+  int c;
+  acquire(&page_ref.lock);
+  c = page_ref.counts[pa / PGSIZE];
+  release(&page_ref.lock);
+  return c;
+}
 ```
 
 **2. 自定义页表标志位**（`kernel/riscv.h`）：
@@ -465,42 +498,59 @@ int ref_get(uint64 pa)  { acquire(&page_ref.lock); int c = page_ref.counts[pa / 
 ```c
 // Fork 时：共享映射 + 打 COW 标记（零拷贝）
 int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
-  for(i = 0; i < sz; i += PGSIZE) {
-    pte_t *pte = walk(old, i, 0);
-    if(pte == 0 || (*pte & PTE_V) == 0) continue;  // 兼容 Lazy
-    uint64 pa = PTE2PA(*pte);
-    uint flags = PTE_FLAGS(*pte);
+  pte_t *pte;
+  uint64 pa, i;
+  uint flags;
+
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walk(old, i, 0)) == 0)
+      continue;
+    if((*pte & PTE_V) == 0)
+      continue;
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
 
     if(flags & PTE_W) {
       flags = (flags & ~PTE_W) | PTE_COW;           // 清写权限 + 打 COW 标记
       *pte = (*pte & ~PTE_W) | PTE_COW;
     }
     ref_inc(pa);                                    // 递增物理页引用计数
-    mappages(new, i, PGSIZE, pa, flags);            // 建立共享物理页映射
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      ref_dec(pa);                                  // 映射失败回退引用计数
+      goto err;
+    }
   }
   return 0;
+
+ err:
+  uvmunmap(new, 0, i / PGSIZE, 1);
+  return -1;
 }
 
 // 缺页时：COW 物理页分裂
 int cow_alloc(pagetable_t pagetable, uint64 va) {
+  if(va >= MAXVA) return -1;
   uint64 va0 = PGROUNDDOWN(va);
   pte_t *pte = walk(pagetable, va0, 0);
-  if(!(pte && (*pte & PTE_V) && (*pte & PTE_COW))) return -1;
+  if(pte == 0 || (*pte & PTE_V) == 0) return -1;
 
-  uint64 pa = PTE2PA(*pte);
-  uint flags = PTE_FLAGS(*pte);
+  if(*pte & PTE_COW) {
+    uint64 pa = PTE2PA(*pte);
+    uint flags = PTE_FLAGS(*pte);
 
-  if(ref_get(pa) == 1) {
-    // 独占引用：原地恢复写权限
-    *pte = (*pte & ~PTE_COW) | PTE_W;
-  } else {
-    // 共享引用：分配新物理页并执行数据拷贝
-    char *mem = kalloc();
-    memmove(mem, (char*)pa, PGSIZE);
-    *pte = PA2PTE(mem) | ((flags & ~PTE_COW) | PTE_W);
-    kfree((void*)pa);                               // 递减原物理页引用计数
+    if(ref_get(pa) == 1) {
+      // 独占引用：原地恢复写权限
+      *pte = (*pte & ~PTE_COW) | PTE_W;
+    } else {
+      // 共享引用：分配新物理页并执行数据拷贝
+      char *mem = kalloc();
+      if(mem == 0) return -1;
+      memmove(mem, (char*)pa, PGSIZE);
+      *pte = PA2PTE(mem) | ((flags & ~PTE_COW) | PTE_W);
+      kfree((void*)pa);                             // 递减原物理页引用计数
+    }
+    sfence_vma();                                   // 刷新本核 TLB
   }
-  sfence_vma();                                     // 刷新本核 TLB
   return 0;
 }
 ```
@@ -535,47 +585,78 @@ struct vma {
 ```c
 // mmap 系统调用：建立 VMA 区域，延迟物理装载
 uint64 sys_mmap(void) {
-  uint64 addr; int len, prot, flags, fd, offset;
+  uint64 addr;
+  int len, prot, flags, fd, offset;
   struct file *f;
-  if(argaddr(0, &addr) < 0 || argint(1, &len) < 0 || argint(2, &prot) < 0 ||
-     argint(3, &flags) < 0 || argfd(4, &fd, &f) < 0 || argint(5, &offset) < 0)
+  struct proc *p = myproc();
+
+  argaddr(0, &addr);
+  argint(1, &len);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  argint(5, &offset);
+
+  if(argfd(4, 0, &f) < 0)
     return -1;
 
-  struct proc *p = myproc();
+  // 权限防御：共享可写映射要求文件本身可写
+  if((prot & PROT_WRITE) && (flags & MAP_SHARED) && (f->writable == 0))
+    return -1;
+
+  if(f->type != FD_INODE)
+    return -1;
+
+  // 寻找空闲的 VMA 槽位
   struct vma *v = 0;
-  // 寻找空闲的 VMA 结构
   for(int i = 0; i < 16; i++) {
-    if(!p->vmas[i].valid) {
-      v = &p->vmas[i]; break;
+    if(p->vmas[i].valid == 0) { v = &p->vmas[i]; break; }
+  }
+  if(v == 0) return -1;
+
+  // 自动寻找未被占用的高虚拟地址区间（1GB 以上起始）
+  uint64 va = 0x40000000;
+  for(int i = 0; i < 16; i++) {
+    if(p->vmas[i].valid && p->vmas[i].addr + p->vmas[i].len > va) {
+      va = PGROUNDUP(p->vmas[i].addr + p->vmas[i].len);
     }
   }
-  if(!v) return -1;
 
   v->valid = 1;
-  v->addr = PGROUNDDOWN(p->sz);  // 在堆顶进行虚拟空间预留映射
-  v->len = PGROUNDUP(len);
+  v->addr = va;
+  v->len = len;
   v->prot = prot;
   v->flags = flags;
-  v->f = filedup(f);             // 递增文件引用计数
+  v->f = filedup(f);    // 递增文件引用计数
   v->offset = offset;
-  p->sz += v->len;               // 抬升虚存大小上限
-  return v->addr;
+
+  return va;
 }
 
-// usertrap() 中对 VMA 页面的缺页懒加载支持
-int mmap_alloc(pagetable_t pagetable, struct vma *v, uint64 va) {
-  char *mem = kalloc();
-  memset(mem, 0, PGSIZE);
-  // 计算当前虚拟页在文件中的绝对偏移
-  int file_off = v->offset + (va - v->addr);
-  ilock(v->f->ip);
-  readi(v->f->ip, 0, (uint64)mem, file_off, PGSIZE); // 从磁盘读盘，零拷贝直接读入物理内存
-  iunlock(v->f->ip);
-  
-  int pte_flags = PTE_U | PTE_R;
-  if(v->prot & PROT_WRITE) pte_flags |= PTE_W;
-  mappages(pagetable, va, PGSIZE, (uint64)mem, pte_flags);
-  return 0;
+// usertrap() 中对 VMA 页面的缺页懒加载（内联逻辑）
+// 1. 先检查缺页地址是否属于某个 VMA 映射区
+struct vma *v = 0;
+for(int i = 0; i < 16; i++) {
+  if(p->vmas[i].valid && stval >= p->vmas[i].addr
+     && stval < p->vmas[i].addr + p->vmas[i].len) {
+    v = &p->vmas[i]; break;
+  }
+}
+if(v != 0) {
+  // 写异常 + 只读映射 → 拒绝
+  if(scause == 15 && !(v->prot & PROT_WRITE)) { setkilled(p); }
+  else {
+    char *mem = kalloc();
+    memset(mem, 0, PGSIZE);
+    ilock(v->f->ip);
+    int file_offset = v->offset + (va0 - v->addr);
+    readi(v->f->ip, 0, (uint64)mem, file_offset, PGSIZE);
+    iunlock(v->f->ip);
+    int perm = PTE_U;
+    if(v->prot & PROT_READ)  perm |= PTE_R;
+    if(v->prot & PROT_WRITE) perm |= PTE_W;
+    mappages(p->pagetable, va0, PGSIZE, (uint64)mem, perm);
+  }
 }
 ```
 
@@ -604,28 +685,48 @@ int sched_mode;
 **3. 核心代码**（`kernel/proc.c`）：
 ```c
 void scheduler(void) {
+  struct proc *p;
+  struct cpu *c = mycpu();
+  c->proc = 0;
   for(;;){
     intr_on();
     if(sched_mode == 0) {
-      // RR 调度
+      // RR 调度（持锁-检查-释放，逐进程处理）
       for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
         if(p->state == RUNNABLE) {
           p->state = RUNNING;
+          c->proc = p;
           swtch(&c->context, &p->context);
+          c->proc = 0;
         }
+        release(&p->lock);
       }
     } else {
-      // FCFS 调度
+      // FCFS 调度：两遍扫描
       struct proc *first_p = 0;
+      int first_ctime = 0;
+      // 第一遍：逐进程持锁-检查-释放，找到 ctime 最小的 RUNNABLE 进程
       for(p = proc; p < &proc[NPROC]; p++) {
-        if(p->state == RUNNABLE &&
-           (first_p == 0 || p->ctime < first_p->ctime)) {
-          first_p = p;
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          if(first_p == 0 || p->ctime < first_ctime) {
+            first_ctime = p->ctime;
+            first_p = p;
+          }
         }
+        release(&p->lock);
       }
+      // 第二遍：锁定选中的进程，验证状态后投入运行
       if(first_p) {
-        first_p->state = RUNNING;
-        swtch(&c->context, &first_p->context);
+        acquire(&first_p->lock);
+        if(first_p->state == RUNNABLE) {
+          first_p->state = RUNNING;
+          c->proc = first_p;
+          swtch(&c->context, &first_p->context);
+          c->proc = 0;
+        }
+        release(&first_p->lock);
       }
     }
   }
@@ -642,20 +743,37 @@ void scheduler(void) {
 **2. 核心代码**（`kernel/proc.c`）：
 ```c
 int waitpid(int target_pid, uint64 addr, int options) {
-  for(;;) {
-    for(pp = proc; pp < &proc[NPROC]; pp++) {
-      if(pp->parent != p) continue;
-      if(target_pid > 0 && pp->pid != target_pid) continue; // 匹配目标 PID
+  struct proc *pp;
+  int havekids, pid;
+  struct proc *p = myproc();
 
-      if(pp->state == ZOMBIE) {
-        pid = pp->pid;
-        freeproc(pp);                                      // 彻底回收资源
-        copyout(p->pagetable, addr, (char*)&temp_xstate, sizeof(temp_xstate)); // 状态写回用户态
-        return pid;
+  acquire(&wait_lock);
+  for(;;){
+    havekids = 0;
+    for(pp = proc; pp < &proc[NPROC]; pp++){
+      if(pp->parent == p){
+        if(target_pid > 0 && pp->pid != target_pid) continue; // 匹配目标 PID
+        acquire(&pp->lock);
+        havekids = 1;
+        if(pp->state == ZOMBIE){
+          pid = pp->pid;
+          int temp_xstate = pp->xstate;
+          freeproc(pp);                                      // 彻底回收资源
+          release(&pp->lock);
+          release(&wait_lock);
+          // 状态写回用户态
+          if(addr != 0 && copyout(p->pagetable, addr, (char *)&temp_xstate,
+                                  sizeof(temp_xstate)) < 0) {
+            return -1;
+          }
+          return pid;
+        }
+        release(&pp->lock);
       }
     }
-    if(options & WNOHANG) return 0;                        // WNOHANG：立即返回 0
-    sleep(p, &wait_lock);                                  // 阻塞挂起等待
+    if(!havekids || killed(p)){ release(&wait_lock); return -1; }
+    if(options == 1){ release(&wait_lock); return 0; }       // WNOHANG
+    sleep(p, &wait_lock);                                    // 阻塞挂起等待
   }
 }
 ```
@@ -671,17 +789,17 @@ struct sem {
 ```
 
 **2. 算法控制流：基于 sleep/wakeup 的进程级锁机制**
-利用内核字节级堆分配器 kmalloc 动态创建及回收 sem。在 sem_wait 中，若计数归零，调用内核 sleep 挂起进程。P/V 操作均直接使用信号量内存地址作为睡眠通道（chan），从而在 sem_signal 中通过 wakeup(s) 实现精准调度。
+利用内核字节级堆分配器 kmalloc 动态创建及回收 sem。在 sem_wait 中，先递减计数；若计数变为负数（资源耗尽），调用内核 sleep 挂起进程。P/V 操作均直接使用信号量内存地址作为睡眠通道（chan），从而在 sem_signal 中通过 wakeup(s) 实现精准调度。
 
 **3. 核心代码**（`kernel/sem.c`）：
 ```c
 int sem_wait(uint64 sem_addr) {          // P 操作：申请资源
   struct sem *s = (struct sem*)sem_addr;
   acquire(&s->lock);
-  while(s->count == 0) {
-    sleep(s, &s->lock);                  // 挂起在信号量 s 上并释放锁
-  }
   s->count--;
+  while(s->count < 0) {
+    sleep(s, &s->lock);                  // 资源不足，挂起在信号量 s 上
+  }
   release(&s->lock);
   return 0;
 }
@@ -690,7 +808,9 @@ int sem_signal(uint64 sem_addr) {        // V 操作：释放资源并唤醒
   struct sem *s = (struct sem*)sem_addr;
   acquire(&s->lock);
   s->count++;
-  wakeup(s);                             // 唤醒在通道 s 上的进程
+  if(s->count <= 0) {
+    wakeup(s);                           // 有进程在等待时，唤醒在通道 s 上的进程
+  }
   release(&s->lock);
   return 0;
 }
@@ -720,18 +840,17 @@ if(which_dev == 2 && p->alarm_interval > 0 && p->alarm_running == 0) {
   p->alarm_ticks++;
   if(p->alarm_ticks == p->alarm_interval) {
     p->alarm_ticks = 0;
+    p->alarm_running = 1;                // 先置防重入锁，防止嵌套触发
     *p->alarm_tf = *p->trapframe;        // 备份完整寄存器现场
     p->trapframe->epc = p->alarm_handler; // 重定向返回地址到用户 handler
-    p->alarm_running = 1;                // 开启防重入防护
   }
 }
 
 // sigreturn 系统调用：恢复现场并清除防重入锁
 uint64 sys_sigreturn(void) {
   *p->trapframe = *p->alarm_tf;          // 恢复寄存器原现场
-  p->alarm_running = 0;                  // 接触重入保护
-  p->alarm_ticks = 0;
-  return p->trapframe->a0;               // 保护返回值
+  p->alarm_running = 0;                  // 解除重入保护
+  return p->trapframe->a0;               // 保护返回值（避免被 syscall 框架覆盖）
 }
 ```
 
@@ -755,22 +874,30 @@ struct file {
 **3. 核心代码**（`kernel/sysfile.c`）：
 ```c
 uint64 sys_lseek(void) {
-  struct file *f; int offset, whence;
-  argfd(0, &fd, &f);
-  argint(1, &offset); argint(2, &whence);
+  struct file *f;
+  int offset;
+  int whence;
 
-  if(f->type != FD_INODE) return -1;     // 仅支持普通 inode 文件
+  argint(1, &offset);
+  argint(2, &whence);
+  if(argfd(0, 0, &f) < 0)
+    return -1;
 
-  ilock(f->ip);                           // Inode 锁保护
-  int new_off;
+  if(f->type != FD_INODE)                // 仅支持普通 inode 文件
+    return -1;
+
+  struct inode *ip = f->ip;
+  int new_off = f->off;
+
+  ilock(ip);                              // Inode 锁保护
   if(whence == 0)      new_off = offset;
   else if(whence == 1) new_off = f->off + offset;
-  else if(whence == 2) new_off = f->ip->size + offset;
-  else { iunlock(f->ip); return -1; }
+  else if(whence == 2) new_off = ip->size + offset;
+  else { iunlock(ip); return -1; }
 
-  if(new_off < 0) { iunlock(f->ip); return -1; }
+  if(new_off < 0) { iunlock(ip); return -1; }
   f->off = new_off;
-  iunlock(f->ip);
+  iunlock(ip);
   return new_off;
 }
 ```
@@ -791,22 +918,43 @@ uint64 sys_lseek(void) {
 ```c
 // 创建软链接
 uint64 sys_symlink(void) {
+  begin_op();
   ip = create(path, T_SYMLINK, 0, 0);
-  writei(ip, 0, (uint64)target, 0, strlen(target)); // 路径保存至数据块
+  if(ip == 0) { end_op(); return -1; }
+  // 将目标路径写入该 Inode 的数据块中
+  if(writei(ip, 0, (uint64)target, 0, strlen(target)) != strlen(target)) {
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
   iupdate(ip);
   iunlockput(ip);
+  end_op();
   return 0;
 }
 
 // sys_open() 递归解析逻辑
 int depth = 0;
 while(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
-  if(depth >= 10) { iunlockput(ip); return -1; }    // 超过 10 层说明存在环路，中断报错
-  readi(ip, 0, (uint64)target_path, 0, ip->size);
-  iunlockput(ip);
-  if((ip = namei(target_path)) == 0) return -1;     // 递归寻路
-  ilock(ip);
+  if(depth >= 10) {                              // 超过 10 层说明存在环路，中断报错
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
   depth++;
+  char target_path[MAXPATH];
+  memset(target_path, 0, MAXPATH);
+  if(readi(ip, 0, (uint64)target_path, 0, ip->size) != ip->size) {
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  iunlockput(ip);
+  if((ip = namei(target_path)) == 0) {           // 递归寻路
+    end_op();
+    return -1;                                    // 断头链接，打开失败
+  }
+  ilock(ip);
 }
 ```
 
@@ -833,8 +981,19 @@ struct proc {
 **3. 核心代码**（`kernel/proc.c`）：
 ```c
 int clone(uint64 fn, uint64 stack, uint64 arg) {
-  struct proc *np = allocproc();                // 1. 分配独立 PCB 与独立顶级页表
-  uvmsharecopy(p->pagetable, np->pagetable, p->sz); // 2. 映射同一套用户虚拟物理页
+  int i, pid;
+  struct proc *np;
+  struct proc *p = myproc();
+
+  // 1. 分配独立 PCB 与独立顶级页表
+  if((np = allocproc()) == 0) return -1;
+
+  // 2. 映射同一套用户虚拟物理页
+  if(uvmsharecopy(p->pagetable, np->pagetable, p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
   np->sz = p->sz;
 
   *(np->trapframe) = *(p->trapframe);
@@ -849,11 +1008,24 @@ int clone(uint64 fn, uint64 stack, uint64 arg) {
   for(i = 0; i < 16; i++)
     if(p->vmas[i].valid) { np->vmas[i] = p->vmas[i]; filedup(p->vmas[i].f); }
 
+  safestrcpy(np->name, p->name, sizeof(p->name));
+  pid = np->pid;
+
   np->is_thread = 1;
   np->tgid = p->tgid;                           // 绑定线程组
+
+  release(&np->lock);
+
+  // 挂载父子关系，便于 wait()/waitpid() 正常回收
+  acquire(&wait_lock);
   np->parent = p;
+  release(&wait_lock);
+
+  acquire(&np->lock);
   np->state = RUNNABLE;
-  return np->pid;
+  release(&np->lock);
+
+  return pid;
 }
 ```
 
@@ -907,6 +1079,10 @@ uint64 sys_futex(void) {
   uint64 uaddr; int op, val;
   argaddr(0, &uaddr); argint(1, &op); argint(2, &val);
 
+  // 地址对齐检验
+  if(uaddr % 4 != 0)
+    return -1;
+
   // 虚拟地址 → 物理地址（作为同步 Key，含页内偏移量确保唯一性）
   uint64 paddr = walkaddr(p->pagetable, uaddr);
   if(paddr == 0) return -1;
@@ -915,7 +1091,10 @@ uint64 sys_futex(void) {
   if(op == FUTEX_WAIT) {
     acquire(&futex_lock);
     int cur_val;
-    copyin(p->pagetable, (char*)&cur_val, uaddr, sizeof(int));
+    if(copyin(p->pagetable, (char*)&cur_val, uaddr, sizeof(int)) < 0) {
+      release(&futex_lock);
+      return -1;
+    }
     if(cur_val != val) {
       release(&futex_lock);              // 原子检查：锁已被释放，退回用户态自旋
       return -2;                         // 返回 EAGAIN
@@ -933,14 +1112,19 @@ uint64 sys_futex(void) {
     int woken = 0;
     // 唤醒同 tgid 且处于同一同步物理通道的等待进程
     for(struct proc *np = proc; np < &proc[NPROC]; np++) {
-      if(np->state == SLEEPING && np->chan == (void*)paddr
-         && np->tgid == p->tgid) {
-        np->state = RUNNABLE;
-        if(++woken >= val) break;
+      if(np != p) {
+        acquire(&np->lock);
+        if(np->state == SLEEPING && np->chan == (void*)paddr
+           && np->tgid == p->tgid) {
+          np->state = RUNNABLE;
+          woken++;
+        }
+        release(&np->lock);
+        if(woken >= val) break;
       }
     }
     release(&futex_lock);
-    return woken;
+    return woken;                        // 返回实际唤醒数量
   }
   return -1;
 }
@@ -1173,19 +1357,20 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
 
 ### 7.2 存在不足
 
-- bench 偶发卡死：虽然系统能够稳定运行 alltests 和 grind 压力测试，但在少数情况下，运行 bench 实验时系统仍有偶发的卡死现象，初步分析可能与线程池销毁阶段 destroy_test_pool() 中的 wait() 回收时序有关。
-- FCFS 多核公平性：当前多核同时扫描全局进程表选取最早进程，可能导致同一进程被多核争抢。
-- mmap 不支持 MAP_ANONYMOUS：仅支持基于文件的映射，不支持匿名映射。
+- FCFS 两阶段扫描在释放进程锁与重新锁定的间隙存在同步窗口，会有额外开销。
+- mmap 未完全实现零填充，存在物理内存历史脏数据泄露的隐患。
+- clone 当前通过 filedup 复制文件描述符表，而非完全共享同一个文件描述符数组，与 POSIX 标准线程的文件共享语义存在差异。
+- 少数情况下，运行 bench 实验时系统有偶发的卡死现象，初步定位该问题与 sys_futex 的慢速路径调度时序有关，或其他原因。
 
 ### 7.3 展望
 
-- 当前 kmalloc/kfree 基于 First-Fit 算法，可进一步实现更高效的 Buddy System 或 Slab Allocator。
 - 实现多核负载均衡，改进 FCFS 调度器，引入每个核心的本地就绪队列，减少全局锁竞争。
+- 扩展 clone 系统调用参数，支持线程间真正共享同一个描述符数组，提升 POSIX 兼容性。
+- 进一步分析并修复实验程序偶发卡死的问题。
+- 当前 kmalloc/kfree 基于 First-Fit 算法，可进一步实现更高效的 Buddy System 或 Slab Allocator。
 - 实现 ProcFS 虚拟文件系统。
 - 增加更多进程调度算法（SPF、优先级调度等）。
 - 完善用户态 libc。
-- 进一步分析并修复实验程序偶发卡死的问题。
-- 增加图形化界面。
 - ......
 
 ## 参考资料（部分）
