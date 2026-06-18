@@ -1,7 +1,8 @@
 <!-- <div class="markdown-body"> -->
 
-# 操作系统课程设计结题报告
+# 基于 xv6 的内核功能扩展与性能量化评估 
 
+- **操作系统课程设计结题报告**
 - 姓名：袁善
 - 学号：20231072030
 - 日期：2026年6月20日
@@ -9,19 +10,15 @@
 
 ## 一、项目摘要
 
-- **选题：方案 A：OS 内核实现**
-- **基准**：基于 **MIT xv6-riscv**（`https://github.com/mit-pdos/xv6-riscv`），代码基线回退至 2023 年 1 月前的稳定状态。
-- **目标**：在完成课程要求功能的前提下，引入部分现代 Unix/Linux 内核设计思想，拓展 xv6 内核的功能边界并验证其在真实负载下的表现。
-- **组队情况**：单人独立完成。
-- **开发环境**：
-  - 宿主机：Windows 11 + VSCode (SSH 远程连接)
-  - 目标机：Ubuntu 22.04 LTS 
-  - 编译：`riscv64-linux-gnu-gcc` 
-  - 模拟器：QEMU 7.2.0（`qemu-system-riscv64`）
+- **项目背景与目标**：
+  - 作为 MIT 经典的教学操作系统，xv6-riscv 展现了简洁的 Unix 内核结构与 RISC-V 虚拟内存机制。然而，原生 xv6 针对教学做了极简化处理，缺乏按需分配、写时复制（COW）、轻量级线程、文件内存映射（mmap）等现代内核特性，难以应对高并发或算力密集型应用。
+  - 基于此，本项目旨在**基于 MIT xv6-riscv**，在完成课程要求功能的前提下，引入部分现代 Unix/Linux 内核设计思想，**拓展** xv6 内核的**功能**边界并**验证其在真实负载下的表现**。
+- **团队信息与分工**：本项目由袁善（学号 20231072030）单人独立完成。
+- **开发环境**：宿主机 Windows 11 + VSCode (SSH 远程连接)；目标机 Ubuntu 22.04 LTS；编译：`riscv64-linux-gnu-gcc`；模拟器：QEMU 7.2.0（`qemu-system-riscv64`）。
 - **工作概述**
-  - **功能实现**：共支持 37 个系统调用（其中增量实现 16 个）。包括内核级堆分配器（kmalloc/kfree）、按需分页（Lazy Allocation）、写时复制（COW Fork）、文件内存映射（mmap/munmap）、FCFS 与 RR 动态调度切换、轻量级线程（clone）、用户态快速同步互斥体（futex）以及信号量、异步定时器（Alarm）、软链接（Symlink）等模块。
-  - **功能验证**：系统通过增量的 20 项单元测试、xv6 原生 usertests 集成测试，在 grind 压力测试下持续运行，未发生内核 Panic 或死锁。**达到课程标准。**
-  - **性能评估**：移植极简 Transformer 推理引擎 llama.c 并加载 stories260K 模型，针对多核并行能力、同步原语效率（Spinlock vs Pipe vs Futex）及存储映射机制（read vs mmap）设计对比实验，量化评估内核相关子系统的实际开销。
+  - **功能实现**：共支持 37 个系统调用（其中**增量实现 16 个**）。包括内核级堆分配器（kmalloc/kfree）、按需分页（Lazy Allocation）、写时复制（COW Fork）、文件内存映射（mmap/munmap）、FCFS 与 RR 动态调度切换、轻量级线程（clone）、用户态快速同步互斥体（futex）以及信号量、异步定时器（Alarm）、软链接（Symlink）等模块。
+  - **功能验证**：系统通过**增量的 20 项单元测试**、**xv6 原生 usertests 集成测试**，在 **grind 压力测试**下持续运行，未发生内核 Panic 或死锁。**达到课程标准。**
+  - **性能评估**：移植极简 Transformer 推理引擎 **llama.c** 并加载 **stories260K** 模型，针对**多核并行能力、同步原语效率及存储映射机制设计**对比实验，量化评估内核相关子系统的实际开销。
 
 ```mermaid
 graph TB
@@ -103,7 +100,7 @@ graph TB
 
 ### 2.1 功能实现
 
-本项目共支持 **37 个系统调用**，其中 21 个为原生系统调用，16 个为本项目增量设计与实现。
+本项目共支持 **37 个系统调用**，其中 21 个为原生系统调用，**16 个为本项目增量设计与实现**。
 
 | 模块 | xv6 已实现功能 | 本项目扩展实现 | 
 |:---------|:------------|:--------------|
@@ -881,9 +878,9 @@ flowchart TD
 
 本项目设计了 alltests 集成测试框架，用于统一调度与运行增量的功能测试。测试项涵盖以下几个方面：
 
-- 功能测试：crash_test.c、ps.c、 kmalloctest.c、sched.c、schedtest.c、waitpidtest.c、semtest.c、alarmtest.c、symlinktest.c、lazytests.c、cowtest.c、 mmaptest.c、clonetest.c、futextest.c。
+- **功能测试**：crash_test.c、ps.c、 kmalloctest.c、sched.c、schedtest.c、waitpidtest.c、semtest.c、alarmtest.c、symlinktest.c、lazytests.c、cowtest.c、 mmaptest.c、clonetest.c、futextest.c。
 
-- xv6 官方综合测试集 usertests.c ，覆盖：
+- xv6 官方综合测试集 **usertests.c** ，覆盖：
     - 系统调用参数合法性：非法用户指针、越界地址、超长字符串
     - 进程与内存管理：fork、wait、exit、kill、sbrk
     - 文件系统功能：文件创建、删除、读写、链接、目录操作
@@ -892,7 +889,7 @@ flowchart TD
 
 ### 4.3 grind 压力测试
 
-- grind.c：xv6 官方压力测试，创建两个子进程，高强度随机执行 23 种操作（fork、kill、文件读写、sbrk、管道等），在持续运行过程中未出现 panic、死锁或异常退出。字符交替输出（如 `ABBABA`）表明多核同步锁设计正确。
+- **grind.c**：xv6 官方压力测试，创建两个子进程，高强度随机执行 23 种操作（fork、kill、文件读写、sbrk、管道等），在持续运行过程中未出现 panic、死锁或异常退出。字符交替输出（如 `ABBABA`）表明多核同步锁设计正确。
 
 ### 4.4 测试结果
 
@@ -902,48 +899,28 @@ flowchart TD
 
 ## 五、LLM 推理引擎移植与性能验证
 
-在 alltests 测试全部通过、grind 长时间运行系统稳定的前提下，为评估本系统在真实算力密集型任务中的实际效率，本项目将**极简 Transformer 推理引擎 llama2.c**（由 Andrej Karpathy 开源）移植至 xv6-riscv，命名为 llama.c。通过在系统内**运行 stories260K 模型（1.04MB）**，项目在进程、内存及同步子系统上设计了三项对比实验。
+随着生成式人工智能的高速发展，大语言模型（LLM）的推理任务正逐步从云端向边缘侧与嵌入式设备迁移。在计算资源有限的软硬件环境下，**提高 AI 推理程序的运行速度并降低其资源开销**，不仅依赖于算法层面的量化与剪枝，也取决于底层操作系统能否提供高效的**多核调度、快速的线程同步以及零拷贝的存储访问**。
 
-实验程序 llama.c 移植自 [karpathy/llama2.c](https://github.com/karpathy/llama2.c)，模型使用 [stories260K.bin](https://huggingface.co/karpathy/tinyllamas)（约 1.04MB），分词器使用 tok512.bin。
+原生的 **xv6-riscv** 作为一个教学操作系统，其设计初衷在于**展示 Unix 的核心概念**，因而在应对算力密集型与 I/O 密集型并存的真实 AI 负载时，存在**并发能力弱、同步开销大以及 I/O 效率较低**的局限。
 
-### 5.1 llama.c：在 xv6 中运行一个简化版大模型
+基于上述背景，本项目在 alltests 测试全部通过、grind 长时间运行系统稳定的前提下，将极简 Transformer 推理引擎 **llama2.c**（由 Andrej Karpathy 开源）移植至 xv6-riscv，命名为 llama.c。本章通过在系统内加载运行 stories260K.bin 模型（1.04MB），设计多组系统级对比实验。其核心目的在于：以大模型推理为真实重载应用闭环，**量化评估**本项目增量实现的轻量级线程（Clone）、快速同步（Futex）和存储映射（mmap）等优化机制，**相较于 xv6 传统基线机制所取得的性能改善幅度**。
 
-llama.c 是一个极简的 Transformer 推理程序。它加载预训练好的模型权重，根据提示词逐个生成后续的 Token。每次生成一个 Token，都要做一次完整的神经网络前向计算：把当前 Token 的向量表示经过多层 Transformer 层的矩阵运算和注意力计算，得到下一个 Token 的概率分布，再从中采样出一个 Token 输出。
 
-原版 run.c 依赖 Linux 的数学库、OpenMP 多线程（#pragma omp parallel for）和标准文件 I/O（fopen/fread）。由于 xv6 的用户态不提供这些，本项目做了**以下三方面的移植**：
-  - **数学函数**：Transformer 推理需要 exp、sqrt、sin、cos、pow 等数学函数做注意力机制中的 RoPE 旋转位置编码和 Softmax 归一化。xv6 没有 `<math.h>`，因此用数值方法手写这些函数。
-  - **静态线程池**：通过 clone 系统调用构建静态工作线程池，替代原版依赖的 OpenMP 实现。为对比同步开销，实现三种同步机制：
-    - Spinlock：空转等待 start_signal 变化，不做系统调用但浪费 CPU
-    - Pipe：通过 read()/write() 系统调用在管道上阻塞/唤醒，每次同步都陷入内核
-    - Futex：无竞争时用户态快速返回，有竞争时通过 futex_wait/futex_wake 挂起/唤醒
-  - **用 open/read/stat/close 替代 fopen/fread/ftell/fclose**。模型加载支持两种方式：
-    - mmap：通过内存映射，零拷贝按需加载
-    - malloc + read：先申请内存，再从磁盘读到用户缓冲区
+- 实验程序 llama.c 移植自 [karpathy/llama2.c](https://github.com/karpathy/llama2.c)，模型使用 [stories260K.bin](https://huggingface.co/karpathy/tinyllamas)（约 1.04MB），分词器使用 tok512.bin。
 
-- **推理流程**
+### 5.1 llama.c 移植
 
-```
-main() → 加载模型权重 + 分词器
-       → generate():
-           1. init_test_pool()      // 创建工作线程池
-           2. for pos = 0..steps:   // 逐个生成 Token
-                forward()           //   Transformer 前向计算
-                  matmul() × 7/层   //   矩阵-向量乘（多线程并行）
-                  attention         //   注意力机制
-                  rmsnorm           //   归一化
-                sample()            //   从概率分布采样
-                printf("%s", token) //   输出当前 Token
-           3. destroy_test_pool()   // 回收工作线程
-```
+llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模型权重，并根据提示词逐个生成后续的 Token。原版的 run.c 依赖标准的数学库（<math.h>）、OpenMP 多线程库以及标准文件 I/O（fopen/fread）。由于 xv6 缺乏完整的 C 标准库支持，本项目对其进行了如下适配移植：
 
-其中 forward() 是最核心的函数，对每一层 Transformer 依次执行：
-- 7 次 matmul()（查询 Q、键 K、值 V、输出 O、前馈网络 w1/w2/w3）
-- RoPE 旋转位置编码
-- Self-Attention（多头注意力计算）
-- 残差连接 + RMS 归一化
-- SiLU 激活函数
+- **数值逼近手写数学函数**：由于 xv6 用户态不支持 <math.h>，而 Transformer 推理中的 RoPE 旋转位置编码和 Softmax 归一化需要大量的指数与三角函数计算，本项目采用数值逼近方法（如泰勒级数展开及快速平方根算法）手写实现了 exp、sqrt、sin、cos 等函数。
 
-**matmul() 是整个程序的计算瓶颈**（占 >90% 的时间），它计算的是 $\text{xout} = W \times x$——用一个大矩阵 $W$（权重）乘一个向量 $x$（当前激活值），结果是一个新向量 $\text{xout}$。**矩阵的每一行可以独立计算，适合并行化。**
+- **轻量级静态线程池**：通过扩展的 clone 系统调用构建静态工作线程池，替代原版依赖的 OpenMP 实现。多线程主要用于并行加速**矩阵-向量乘法（matmul）算子**，该算子占用了推理过程中 90% 以上的计算时间。为了对比不同的同步开销，我们在线程池中实现了三种同步驱动方式：
+  - **Spinlock 模式**：线程在用户态通过原子变量进行忙等待，不发生内核转换，但空转消耗 CPU。
+  - **Pipe 模式**：通过内核管道的 read/write 实现线程的阻塞与唤醒，每次同步都必须经历系统调用。
+  - **Futex 模式**：利用本项目实现的 sys_futex，在无竞争时在用户态快速返回，有竞争时通过内核挂起与精准唤醒。
+- **重构文件读取路径**：用 open/read/stat/close 替换标准的 fopen/fread 等流操作。模型加载支持以下两种方式对比：
+  - **mmap 映射模式**：直接利用 sys_mmap 将模型权重文件映射到虚拟地址空间，实现零拷贝按需加载。
+  - **malloc + read 模式**：先通过 sbrk 申请内存空间，再通过标准文件系统接口将权重数据复制到用户缓冲区。
 
 
 ### 5.2 实验一：多核可扩展性实验
@@ -978,7 +955,7 @@ main() → 加载模型权重 + 分词器
 
 - **实验设计**
   - RR 调度，4 个线程，3 轮重复，每轮生成 10 个 Token。
-  - 分别使用 Spinlock、Pipe、Futex 三种同步方式。
+  - 分别使用 **Spinlock、Pipe、Futex** 三种同步方式。
     - Spinlock：通过在用户态对原子共享标记变量进行无限忙等待，不执行系统调用。
     - Pipe：工作线程通过 read() 系统调用阻塞在内核管道上，主线程通过 write() 写入同步信号唤醒。
     - Futex：工作线程在状态未就绪时通过 futex_wait 进入内核挂起，主线程完成计算后通过 futex_wake 精准唤醒。
@@ -1035,27 +1012,27 @@ main() → 加载模型权重 + 分词器
 
 通过三个实验，本项目对 xv6 系统在以下维度上做了量化评估：
 
-1. **多核并行计算能力**：1→2→4 线程的加速比分别为 1.53× 和 1.84×（RR 模式），证明 xv6 的多核调度和 clone 线程机制能有效利用多核心。但受限于串行部分（Amdahl 定律），4 线程未能达到 4× 的线性加速。
+1. **多核并行计算能力**：1→2→4 线程的加速比分别为 1.53× 和 1.84×（RR 模式），证明 xv6 的**多核调度和 clone 线程机制能有效利用多核心**。但受限于串行部分（Amdahl 定律），4 线程未能达到 4× 的线性加速。
 
-2. **同步原语的效率差异**：Spinlock 因为 CPU 空转几乎无法用于实际负载（268.3 Ticks）；Pipe 通过内核阻塞大幅改善（33.7 Ticks）；Futex 利用 Fast-path/Slow-path 设计在无竞争时避免系统调用，达到最优（20.3 Ticks），比 Pipe 再快 40%。
+2. **同步原语的效率差异**：Spinlock 因为 CPU 空转几乎无法用于实际负载（268.3 Ticks）；Pipe 通过内核阻塞大幅改善（33.7 Ticks）；**Futex** 利用 Fast-path/Slow-path 设计在无竞争时避免系统调用，**达到最优（20.3 Ticks）**，比 Pipe 再快 40%。
 
 3. **存储映射的零拷贝优势**：mmap 的冷启动延迟为 0 Ticks，对比 malloc + read 的 21 Ticks，在首屏加载速度上有数量级优势。按需调页机制将磁盘 I/O 分散到推理过程中，避免了启动时的阻塞等待。
 
-虽然系统已通过增量功能单元测试与 usertests 共 21 项，运行 grind 数十分钟无 panic、无内存泄漏等异常现象，但在运行测试程序以及 bench 时，实验一与二仍有概率发生卡死现象，初步分析可能是 llama.c 的线程池销毁阶段存在问题，或者多线程之间竞争导致死锁，或其他原因，还需要进一步分析修复。
+*虽然系统已通过增量功能单元测试与 usertests 共 21 项，运行 grind 数十分钟无 panic、无内存泄漏等异常现象，但在运行测试程序以及 bench 时，实验一与二仍有概率发生卡死现象，初步分析可能是 llama.c 的线程池销毁阶段存在问题，或者多线程之间竞争导致死锁，或其他原因，还需要进一步分析修复。*
 
 ## 六、创新点
 
 ### 1. 完整的内存管理层次
 
-本系统的内存子系统在 Sv39 页表及物理页框分配器的基础上，自下而上构建了结构完整、层次分明的虚拟内存体系：物理页分配器（kalloc）→ 内核堆分配器（kmalloc）→ 虚拟内存（Sv39 页表）→ 按需分页（Lazy）→ 写时复制（COW）→ 文件内存映射（mmap）。
+本系统的内存子系统在 Sv39 页表及物理页框分配器的基础上，自下而上构建了**结构完整、层次分明的虚拟内存体系**：物理页分配器（kalloc）→ 内核堆分配器（kmalloc）→ 虚拟内存（Sv39 页表）→ 按需分页（Lazy）→ 写时复制（COW）→ 文件内存映射（mmap）。
 
 ### 2. 轻量级线程与用户态快速同步
 
-基于独立顶级页表 + 物理共享实现 clone 线程（LWP），配合 futex 用户态快速锁（Fastpath 用户态原子操作、Slowpath 内核挂起）为并发编程提供了完整的基础设施。在 llama2.c 推理程序中验证了多线程并行+高效同步的实际效果。
+基于**独立顶级页表 + 物理共享实现 clone 线程（LWP）**，配合 **futex 用户态快速锁**（Fastpath 用户态原子操作、Slowpath 内核挂起）为并发编程提供了完整的基础设施。在 llama2.c 推理程序中验证了多线程并行+高效同步的实际效果。
 
 ### 3. 多维度测试验证与应用闭环
 
-系统的稳定性在“功能（alltests 包含 usertests）- 压力（grind）- 真实重载性能（bench）”三个层面得到验证。将 LLM 推理引擎作为系统的真实负载，在逻辑上闭环验证了各系统调用在边缘状态下的健壮度，同时为操作系统的优化方向提供了可量化的客观参考。
+系统的稳定性在“功能（alltests 包含 usertests）- 压力（grind）- 真实重载性能（bench）”三个层面得到验证。**将 LLM 推理引擎作为系统的真实负载**，在逻辑上闭环验证了各系统调用在边缘状态下的健壮度，同时为操作系统的优化方向提供了可量化的客观参考。
 
 
 ## 七、总结与展望
