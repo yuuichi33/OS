@@ -13,7 +13,8 @@
 - **项目背景与目标**：
   - 作为 MIT 经典的教学操作系统，xv6-riscv 展现了简洁的 Unix 内核结构与 RISC-V 虚拟内存机制。然而，原生 xv6 针对教学做了极简化处理，缺乏按需分配、写时复制（COW）、轻量级线程、文件内存映射（mmap）等现代内核特性，难以应对高并发或算力密集型应用。
   - 基于此，本项目旨在**基于 MIT xv6-riscv**，在完成课程要求功能的前提下，引入部分现代 Unix/Linux 内核设计思想，**拓展** xv6 内核的**功能**边界并**验证其在真实负载下的表现**。
-- **团队信息与分工**：本项目由袁善（学号 20231072030）单人独立完成。
+- **团队信息与分工**：本项目由袁善（学号 20231072030）单人完成。
+- **项目仓库地址**：`https://github.com/yuuichi33/OS`
 - **开发环境**：宿主机 Windows 11 + VSCode (SSH 远程连接)；目标机 Ubuntu 22.04 LTS；编译：`riscv64-linux-gnu-gcc`；模拟器：QEMU 7.2.0（`qemu-system-riscv64`）。
 - **工作概述**
   - **功能实现**：共支持 37 个系统调用（其中**增量实现 16 个**）。包括内核级堆分配器（kmalloc/kfree）、按需分页（Lazy Allocation）、写时复制（COW Fork）、文件内存映射（mmap/munmap）、FCFS 与 RR 动态调度切换、轻量级线程（clone）、用户态快速同步互斥体（futex）以及信号量、异步定时器（Alarm）、软链接（Symlink）等模块。
@@ -95,8 +96,6 @@ graph TB
 ```
 
 ## 二、项目完成情况
-
-- **项目仓库地址**：`https://github.com/yuuichi33/OS`
 
 ### 2.1 功能实现
 
@@ -197,8 +196,7 @@ QEMU → OpenSBI (M-mode 初始化与硬件配置)
      → scheduler() → 调度 init 进程 → 启动用户态 Shell
 ```
 
-**2. 启动日志**
-系统在 QEMU 中稳定启动并进入 Shell，启动过程可复现，无异常重启：
+**2. 启动日志**：系统在 QEMU 中稳定启动并进入 Shell，启动过程可复现，无异常重启。此部分完全复用 xv6 已实现功能。
 ```
 xv6 kernel is booting
 
@@ -207,8 +205,6 @@ hart 2 starting
 hart 3 starting
 $ _
 ```
-此部分完全复用 xv6 已实现功能。
-
 
 #### 3.3.2 中断与异常处理（Trap & Interrupt）
 
@@ -958,8 +954,6 @@ while(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
 }
 ```
 
----
-
 #### 3.3.6 多线程机制（Clone）
 
 **1. 核心数据结构：线程管理字段**（`kernel/proc.h`）：
@@ -1192,7 +1186,7 @@ flowchart TD
 
 运行 **alltests 全量通过（`PASS: 21/21`）**；grind 连续运行数十分钟，**系统稳定**。
 
-<center><img src="figs/figbeforebench.png" width="100%"></center>
+<center><img src="figs/figbeforebench.png" width="60%"></center>
 
 ## 五、LLM 推理引擎移植与性能验证
 
@@ -1303,7 +1297,7 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
 
 运行 bench.c 程序结果如图。
 
-<center><img src="figs/figbench.png" width="100%"></center>
+<center><img src="figs/figbench.png" width="60%"></center>
 
 ### 5.6 结论
 
@@ -1358,7 +1352,6 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
 ### 7.2 存在不足
 
 - FCFS 两阶段扫描在释放进程锁与重新锁定的间隙存在同步窗口，会有额外开销。
-- mmap 未完全实现零填充，存在物理内存历史脏数据泄露的隐患。
 - clone 当前通过 filedup 复制文件描述符表，而非完全共享同一个文件描述符数组，与 POSIX 标准线程的文件共享语义存在差异。
 - 少数情况下，运行 bench 实验时系统有偶发的卡死现象，初步定位该问题与 sys_futex 的慢速路径调度时序有关，或其他原因。
 
