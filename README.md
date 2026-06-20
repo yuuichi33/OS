@@ -5,7 +5,7 @@
 - [进度汇报](docs/process.md)
 - [性能基准](docs/bench/bench.md)
 - [结题报告](docs/final_report.md)
-- 结题演示
+- [结题演示](docs/slides.pdf)
 
 
 ## 项目简介
