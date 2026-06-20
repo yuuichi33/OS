@@ -32,6 +32,9 @@
     - 如果计数 > 1：说明还有其他进程共享该页。我们调用 kalloc 申请一个新物理页，将原页内容通过 memmove 拷贝过去，在当前进程页表中重新映射并开启 PTE_W 权限，最后将原物理页的引用计数递减（调用 kfree）。
 
 ### mmap/munmap 
+
+- 参考：https://pdos.csail.mit.edu/6.S081/2025/labs/mmap.html
+
 - 在传统的物理 I/O 中，用户读写文件必须通过 read/write 系统调用，这涉及到“磁盘 -> 内核缓存 -> 用户缓存”的多次数据拷贝，开销极大。 mmap（Memory Mapping） 采用另一种设计：直接把磁盘上的文件，映射到进程的虚拟地址空间中。
 - 核心原理（Lazy File Loading）
   - 当用户调用 mmap(addr, len, prot, flags, fd, offset) 申请文件映射时：

@@ -123,7 +123,9 @@ graph TB
 
 xv6 是一个面向教学的 Unix 风格操作系统，其代码结构清晰、模块划分合理，完整实现了进程管理、虚拟内存管理、文件系统、系统调用和异常处理等核心机制。
 
-本项目**基于 riscv 架构的 xv6** `(https://github.com/mit-pdos/xv6-riscv)`进行增量式开发，重点参考 Linux 和开源项目 Re-XVapor `(https://github.com/sandyyyz/Re-XVapor)` 以及 MIT 6.S081。项目拟在保持 xv6 原有体系结构稳定性的前提下，逐步扩展其功能，实现课程设计要求的操作系统关键机制，并在此基础上**引入部分现代 Unix/Linux 内核设计思想**，提高系统的完整性与可扩展性。
+本项目**基于 riscv 架构的 xv6**进行增量式开发，重点参考 Linux 和开源项目 Re-XVapor 以及 MIT 6.S081。项目拟在保持 xv6 原有体系结构稳定性的前提下，逐步扩展其功能，实现课程设计要求的操作系统关键机制，并在此基础上**引入部分现代 Unix/Linux 内核设计思想**，提高系统的完整性与可扩展性。
+
+*为保证 Ubuntu 22.04 LTS 与 QEMU 版本兼容性，本项目将 xv6- riscv 代码强制回滚至 2022 年底稳定提交 74c1eba，将其作为 baseline 进行开发。*
 
 **处理器架构与内核基准决策依据**
 - **RISC-V 架构指令设计简洁**：规避了 x86 繁重的历史兼容包袱，RV64 寄存器与控制状态寄存器（CSRs）设计清晰，极大简化了上下文切换与 Trap 处理的汇编实现。
@@ -208,15 +210,7 @@ $ _
 
 #### 3.3.2 中断与异常处理（Trap & Interrupt）
 
-xv6 采用**基于 Trap 的统一异常处理框架**。所有系统调用、异常和中断最终均通过 Trap 机制进入内核。RISC-V 架构中，scause 寄存器标识中断/异常类型：
-
-| scause | 类型 | 说明 |
-|:------|:----|:-----|
-| 8 | 系统调用 | `ecall` 指令触发 |
-| 2 | 非法指令 | 执行损坏指令 |
-| 12 | 指令缺页 | 执行无权限内存 |
-| 13 | 读缺页 | 读取未映射/无权限地址 |
-| 15 | 写缺页 | 写入只读/未映射地址 |
+xv6 采用**基于 Trap 的统一异常处理框架**。所有系统调用、异常和中断最终均通过 Trap 机制进入内核。RISC-V 架构中，scause 寄存器标识中断/异常类型。
 
 **1. 异常分发控制流**
   ```
@@ -388,6 +382,8 @@ void kmfree(void *addr) {
 
 ##### B. 按需分页（Lazy Allocation）
 
+为避免进程在 sbrk 申请大块堆内存时立即全量分配物理页造成的资源浪费，本项目实现按需分页机制，仅在进程实际访问虚拟地址时才通过缺页异常动态装载物理页，实现内存的惰性分配与按需使用。
+
 **1. 算法控制流：惰性分配与缺页补全**
 - **申请时（sys_sbrk）**：仅调整进程虚拟地址空间上界 p->sz（p->sz += n），不调用 kalloc 申请物理页。
 - **缺页触发（usertrap）**：当进程实际读写未分配的虚拟地址时，触发缺页异常（scause == 13/15）。在 usertrap() 中通过 walk(pagetable, va, 0) 确认该虚拟地址合法（属于 [0, p->sz) 且未映射）。
@@ -441,6 +437,8 @@ if(scause == 13 || scause == 15) {
 ```
 
 ##### C. 写时复制（Copy-On-Write Fork）
+
+为消除 fork 系统调用中父子进程物理内存的全量拷贝开销，本项目引入写时复制（COW）机制，使父子进程在 fork 后共享同一物理页，仅在任意一方尝试写入时才触发私有副本分裂，从而显著降低进程创建的时间与空间成本。
 
 **1. 核心数据结构： 物理页引用计数池**（`kernel/kalloc.c`）：
 ```c
@@ -660,6 +658,8 @@ if(v != 0) {
 
 ##### A. FCFS + RR 调度器
 
+为适应不同负载场景的调度需求，本项目在原有 RR 时间片轮转调度的基础上扩展了 FCFS 先来先服务调度策略，根据进程创建时间戳选取最早到达的进程运行，并提供运行时动态切换调度模式的系统调用接口。
+
 **1. 核心数据结构**（`kernel/proc.h`）：
 ```c
 struct proc {
@@ -731,6 +731,8 @@ void scheduler(void) {
 
 ##### B. waitpid 机制
 
+为支持父进程对特定子进程的精准回收与非阻塞状态查询，本项目在原有 wait 机制上扩展了 waitpid 系统调用，支持按目标 PID 匹配特定子进程，并通过 WNOHANG 选项实现非阻塞轮询，避免父进程在无子进程退出时被不必要地挂起。
+
 **1. 算法控制流：精准子进程回收与非阻塞**
 在原有 `wait` 机制上扩展：
 - **精准回收**：若参数 target_pid > 0，则扫描子进程表时仅匹配 PID 对应的特定子进程；若 target_pid == -1，回退为回收任意子进程。
@@ -776,6 +778,8 @@ int waitpid(int target_pid, uint64 addr, int options) {
 
 ##### C. 信号量（Semaphore）
 
+为提供多进程间的同步与互斥原语，本项目基于内核 sleep/wakeup 机制实现计数信号量，支持资源的 P/V 原子操作。信号量通过 kmalloc 动态分配与回收，使用信号量内存地址作为睡眠通道实现精准唤醒。
+
 **1. 核心数据结构**（`kernel/sem.c`）：
 ```c
 struct sem {
@@ -813,6 +817,8 @@ int sem_signal(uint64 sem_addr) {        // V 操作：释放资源并唤醒
 ```
 
 ##### D. Alarm 异步定时器
+
+该机制的作用是向用户进程提供非阻塞的周期性异步事件通知机制（类似 UNIX 信号 SIGALRM）。进程可注册定时器间隔与回调函数，内核在时钟中断中累计滴答计数，到期后自动备份现场并将控制流重定向至用户态处理函数，处理完成后通过 sigreturn 恢复原上下文。
 
 **1. 核心数据结构：struct proc 成员**（`kernel/proc.h`）：
 ```c
@@ -852,7 +858,11 @@ uint64 sys_sigreturn(void) {
 
 #### 3.3.5 文件系统（File System）
 
+xv6 使用日志型文件系统，主要由 Buffer Cache、Logging Layer、Inode Layer、Directory Layer 组成。
+
 ##### A. lseek 文件定位
+
+为支持文件的随机读写定位，本项目实现 lseek 系统调用，支持 SEEK_SET（文件头）、SEEK_CUR（当前位置）和 SEEK_END（文件尾）三种基准模式，并通过 Inode 级睡眠锁保证多核并发下偏移量更新的一致性。
 
 **1. 核心数据结构**（`kernel/file.h`）：
 ```c
@@ -900,6 +910,8 @@ uint64 sys_lseek(void) {
 
 ##### B. Symlink 软链接
 
+为支持文件系统的间接路径引用与快捷访问，本项目实现符号链接（软链接）机制，允许创建指向任意目标路径的链接文件。打开软链接时内核递归解析目标路径，并通过最大 10 层的递归深度限制防止环路死循环。
+
 **1. 核心数据结构**（`kernel/stat.h` / `kernel/fcntl.h`）：
 ```c
 #define T_SYMLINK 4       // 软链接类型
@@ -907,8 +919,9 @@ uint64 sys_lseek(void) {
 ```
 
 **2. 算法控制流：环路检测与递归跟随**
-- 创建：分配 T_SYMLINK 类型的 inode，并通过 writei 将指向的目标路径写入其数据块中。
-- 解析：在 sys_open() 路径中，若打开的是软链接且无 O_NOFOLLOW 标志，则通过 readi 读出目标路径，调用 namei 递归查找。限制递归解析最大层级为 10，超过判定为环路死循环并返回失败。
+- 创建软链接（sys_symlink）：分配 T_SYMLINK 节点，利用 writei 将目标路径字符串直接写入其数据块中。
+- 递归跟随解析：在 sys_open 路径中检测到软链接时，利用 readi 读出目标路径，调用 namei 递归查找。
+- 环路检测保护：限制递归深度 depth 上限为 10，超过则判定为环路死循环并中断报错，防止内核无限死循环。
 
 **3. 核心代码**（`kernel/sysfile.c`）：
 ```c
@@ -956,6 +969,8 @@ while(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)) {
 
 #### 3.3.6 多线程机制（Clone）
 
+为支持用户态轻量级多线程并发编程，本项目基于独立页表 + 物理内存共享模型实现了 clone 系统调用。同一线程组内的多个线程拥有独立的 trapframe 和内核栈以支持并发调度，同时共享用户态虚拟地址空间的所有物理页，实现真正的共享内存多线程（LWP）。
+
 **1. 核心数据结构：线程管理字段**（`kernel/proc.h`）：
 ```c
 struct proc {
@@ -969,8 +984,11 @@ struct proc {
 
 **2. 算法控制流：物理页共享多线程（LWP）模型**
 - **共享与隔离**：为子线程分配独立的 PCB 及专属的 trapframe 物理页，在 CPU 调度上下文切换时隔离核心寄存器。
-- **物理共享**：自定义 uvmsharecopy，将父进程的用户态虚拟页表项原样（不加 PTE_COW）复制到子线程的独立页表中，共享相同的物理内存，并对映射的物理页调用 ref_inc。
-- **状态拷贝**：子线程拥有独立用户态栈 stack，并在 trapframe 中通过 a0 传递参数。父子线程在终结时独立递减物理页计数，当线程组最后一个活跃成员退出时，真正释放共享的虚拟空间物理页。
+- **物理共享**：自定义 uvmsharecopy，将父进程的用户态虚拟页表项原样（不加 PTE_COW）复制到子线程的独立页表中，共享物理内存并调用 ref_inc 递增页计数。
+- **状态拷贝与资源共享**：
+  - **状态传递**：子线程拥有独立用户栈 stack，并在 trapframe 中通过 a0 传递参数。线程组组 ID 绑定为主进程 PID（tgid = p->tgid）。
+  - **资源共享**：通过 filedup 共享主进程的文件表和 VMA 槽位。
+  - **独立退场**：终结时独立递减物理页计数，当线程组最后一个活跃成员退出时，真正释放共享的虚拟空间物理页。
 
 **3. 核心代码**（`kernel/proc.c`）：
 ```c
@@ -1055,6 +1073,8 @@ flowchart TB
 
 #### 3.3.7 Futex 用户态快速同步锁
 
+为实现高效的线程间同步原语，本项目实现了 futex 快速用户态锁。通过 Fast-path 用户态原子操作与 Slow-path 内核挂起的分层设计，在无竞争时完全在用户态完成同步、避免系统调用开销；仅在存在竞争时才通过内核挂起等待线程，并采用物理地址映射与线程组隔离消除 Lost-Wakeup 竞态。
+
 **1. 核心数据结构**（`kernel/proc.c`）：
 ```c
 #define FUTEX_WAIT 0
@@ -1064,6 +1084,15 @@ struct spinlock futex_lock; // 全局锁保护挂起原子性
 ```
 
 **2. 算法控制流："原子检查-挂起"防御 Lost-Wakeup 唤醒竞争**
+- **FUTEX_WAIT 挂起算法**：
+  - 物理 Key 提取：验证地址对齐，调用 walkaddr 获取虚拟地址对应的物理地址 paddr，以此作为独一无二的同步睡眠通道。
+  - 原子校验防 Lost-Wakeup：持全局锁 futex_lock，使用 copyin 二次读取用户态锁的实际值。若值已被改变（说明锁已被快速释放），直接释放锁退出，避免产生“检查与挂起”之间的竞态窗口。
+  - 持锁挂起：若值匹配，锁定进程、关联睡眠通道 chan = paddr、设置 SLEEPING 状态，随后释放全局锁，调用 sched() 切换挂起。
+- **FUTEX_WAKE 唤醒算法**：
+  - 持锁遍历：获取全局锁 futex_lock，遍历全局进程表寻找等待在相同物理地址 paddr 上的进程。
+  - 线程组隔离：除通道匹配外，限定必须属于同一线程组（tgid == p->tgid），执行精准唤醒并置为 RUNNABLE。
+  - 数量控制：唤醒达到用户指定数量 val 后退出，释放全局锁并返回实际唤醒数。
+
 - **Lost-Wakeup 隐患消除**：在 sys_futex(uaddr, FUTEX_WAIT, val) 中，获取全局自旋锁 futex_lock 后，使用 copyin 从用户态再次检查实际值是否仍为 val。若当前值已变为非期望值（说明其他线程已快速释放锁），直接释放锁并退出（返回 -2 通知用户态自旋重试），消除挂起与检查之间的竞态窗口。
 - **通道标识与线程组隔离**：将用户虚拟地址映射通过页表 walk 提取出唯一物理地址（paddr）作为睡眠通道，避免在同一物理页内跨进程的地址发生冲突，遍历进程表唤醒时，限定同 tgid 以实现线程组的范围隔离。
 
@@ -1123,6 +1152,70 @@ uint64 sys_futex(void) {
   return -1;
 }
 ```
+
+#### 3.3.8 用户态 ps 进程快照
+
+为用户提供实时查看系统进程状态的功能，本项目实现 getprocs 系统调用与 ps 命令。内核遍历进程表采集各进程的 PID、运行状态、虚拟内存大小及名称摘要，通过安全拷贝传回用户态后以表格形式按列展示，便于调试与系统监控。
+
+**1. 核心数据结构**（`kernel/sysproc.c` / `user/user.h`）：
+```c
+// 用户态进程快照结构： 内核与用户态间传递进程摘要信息
+struct uproc {
+  int pid;          // 进程 ID
+  int state;        // 进程状态（UNUSED / USED / SLEEPING / RUNNABLE / RUNNING / ZOMBIE）
+  uint64 sz;        // 虚拟地址空间大小（字节）
+  char name[16];    // 进程名称
+};
+```
+
+**2. 算法控制流：进程表快照采集与安全拷贝**
+- **内核态采集（sys_getprocs）**：遍历全局进程表 proc[]，对每个非 UNUSED 状态的进程持锁读取其 pid、state、sz、name，存入内核临时缓冲区 kprocs[]。
+- **安全拷贝至用户态**：通过 copyout() 将内核缓冲区中的进程快照数组安全写入用户态提供的内存地址 uaddr，由页表机制自动处理 COW/Lazy 缺页。
+- **用户态格式化输出（ps.c）**：用户程序调用 getprocs() 获取快照数组，按列格式化输出 PID、STATE、SIZE、NAME，其中 state 枚举值映射为可读字符串。
+
+**3. 核心代码**（`kernel/sysproc.c` / `user/ps.c`）：
+```c
+// sys_getprocs：遍历进程表，采集非空闲进程摘要信息
+uint64 sys_getprocs(void) {
+  int max; uint64 uaddr;
+  struct uproc kprocs[64];
+  int count = 0;
+
+  argint(0, &max); argaddr(1, &uaddr);
+  if(max > 64) max = 64;
+
+  for(struct proc *p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED && count < max) {
+      kprocs[count].pid = p->pid;
+      kprocs[count].state = p->state;
+      kprocs[count].sz = p->sz;
+      safestrcpy(kprocs[count].name, p->name, sizeof(p->name));
+      count++;
+    }
+    release(&p->lock);
+  }
+  // 安全写回用户态缓冲区
+  if(copyout(myproc()->pagetable, uaddr, (char*)kprocs,
+             count * sizeof(struct uproc)) < 0)
+    return -1;
+  return count;
+}
+
+// ps.c 用户程序：获取进程列表并格式化输出
+int main(int argc, char *argv[]) {
+  struct uproc procs[64];
+  int count = getprocs(64, procs);
+  printf("PID    STATE       SIZE       NAME\n");
+  for(int i = 0; i < count; i++) {
+    char *states[] = {"UNUSED","USED","SLEEPING","RUNNABLE","RUNNING","ZOMBIE"};
+    printf("%d      %s    %d       %s\n",
+           procs[i].pid, states[procs[i].state], procs[i].sz, procs[i].name);
+  }
+  exit(0);
+}
+```
+
 ## 四、测试与验证
 
 为了验证系统在功能性、稳定性和高负载下的实际表现，本项目构建了一个三维**测试与验证体系**：
@@ -1169,7 +1262,7 @@ flowchart TD
 
 本项目设计了 alltests 集成测试框架，用于统一调度与运行增量的功能测试。测试项涵盖以下几个方面：
 
-- **功能测试**：crash_test.c、ps.c、 kmalloctest.c、sched.c、schedtest.c、waitpidtest.c、semtest.c、alarmtest.c、symlinktest.c、lazytests.c、cowtest.c、 mmaptest.c、clonetest.c、futextest.c。
+- **功能测试**：crash_test.c、ps.c、 kmalloctest.c、sched.c、schedtest.c、waitpidtest.c、semtest.c、alarmtest.c、symlinktest.c、lazytests.c、cowtest.c、mmaptest.c、clonetest.c、futextest.c。
 
 - xv6 官方综合测试集 **usertests.c** ，覆盖：
     - 系统调用参数合法性：非法用户指针、越界地址、超长字符串
@@ -1214,7 +1307,7 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
   - **malloc + read 模式**：先通过 sbrk 申请内存空间，再通过标准文件系统接口将权重数据复制到用户缓冲区。
 
 
-### 5.2 实验一：多核可扩展性实验
+### 5.2 实验一：多核并行计算实验
 
 - **实验目的**：验证多线程并行计算能否有效加速推理。把 matmul() 中的矩阵行切分到多个核心上并发执行，观察随着线程数增加，生成 Token 的速度能提升多少。
 
@@ -1267,7 +1360,7 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
 
 ### 5.4 实验三：存储映射冷启动对比实验
 
-- **实验目的**：验证并对比大模型权重文件在 malloc + read 传统阻塞载入与 mmap 文件存储映射机制下的冷启动（Cold-start）初始化耗时。
+- **实验目的**：验证并对比大模型权重文件在 malloc + read 阻塞载入与 mmap 文件存储映射机制下的冷启动初始化耗时。
 
 - **实验设计**
   - 单线程运行，针对 1.04MB 规模的 stories260K.bin 模型权重文件，分别调用两种不同的读取方式。
@@ -1309,7 +1402,7 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
 
 3. **存储映射的零拷贝优势**：mmap 的冷启动延迟为 0 Ticks，对比 malloc + read 的 21 Ticks，在首屏加载速度上有数量级优势。按需调页机制将磁盘 I/O 分散到推理过程中，避免了启动时的阻塞等待。
 
-*虽然系统已通过增量功能单元测试与 usertests 共 21 项，运行 grind 数十分钟无 panic、无内存泄漏等异常现象，但在运行测试程序以及 bench 时，实验一与二仍有概率发生卡死现象，初步分析可能是 llama.c 的线程池销毁阶段存在问题，或者多线程之间竞争导致死锁，或其他原因，还需要进一步分析修复。*
+*虽然系统已通过增量功能单元测试与 usertests 共 21 项，运行 grind 数十分钟无 panic、无内存泄漏等异常现象，但在运行测试程序以及 bench 时，实验一与二仍有概率发生卡死现象，初步定位该问题与 sys_futex 的慢速路径调度时序有关，或其他原因，还需要进一步分析修复。*
 
 ## 六、创新点
 
@@ -1341,12 +1434,12 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
 
 **本项目已达到课程要求**，具体工作：
 
-- 基础环境搭建：构建远程 SSH 开发环境，完成交叉编译链和 QEMU 配置，通过 usertests 基础测试验证。
+- 基础环境搭建：构建远程 SSH 开发环境，配置交叉编译链和 QEMU，通过 usertests 基础测试验证。
 - 系统调用与异常防护：实现用户态异常分类拦截（非法指令、段错误）、getprocs 系统调用、内核动态内存分配器 kmalloc/kmfree，以及集成测试框架 alltests。
 - 核心进程管理：实现 FCFS 与 RR 调度切换、waitpid 精准进程回收、基于 sleep/wakeup 的信号量机制，以及基于时钟中断的 alarm 异步事件通知。
 - 文件系统增强：实现 lseek 文件定位和 symlink 软链接。
 - 进阶虚拟内存管理：实现 Lazy Allocation（按需分页）、Copy-On-Write Fork（写时复制）以及 mmap/munmap（文件内存映射）。
-- 多线程与用户态同步：基于独立页表 + 物理共享的 clone 轻量级线程模型，以及 futex 用户态快速同步锁。
+- 多线程与用户态同步：基于独立页表和物理共享的 clone 轻量级线程模型，futex 用户态快速同步锁。
 - 简单的 LLM 推理引擎移植与性能评估：将 llama2.c 移植到 xv6，通过三个基准实验量化评估多核可扩展性、同步原语效率以及存储映射性能。
 
 ### 7.2 存在不足
