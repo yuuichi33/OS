@@ -3,8 +3,9 @@
 基于 MIT xv6-riscv，引入现代 Unix/Linux 内核设计思想，扩展内核功能边界。
 
 - [进度汇报](docs/process.md)
-- [结题报告](docs/final_report.md)
 - [性能基准](docs/bench/bench.md)
+- [结题报告](docs/final_report.md)
+- 结题演示
 
 
 ## 项目简介
@@ -135,6 +136,7 @@ xv6 kernel is booting
 
 hart 1 starting
 hart 2 starting
+hart 3 starting
 init: starting sh
 $ 
 ```
@@ -220,8 +222,6 @@ $ bench
 | **36** | **`clone`** | 增量 | 创建轻量级线程 |
 | **37** | **`futex`** | 增量 | 用户态快速互斥体 |
 
----
-
 ## 用户程序
 
 | 程序 | 说明 |
@@ -263,3 +263,6 @@ $ bench
 - https://pdos.csail.mit.edu/6.S081/2020/labs/lazy.html
 - https://fail.lingfei.xyz/tags/xv6/
 - https://github.com/karpathy/llama2.c
+
+## 附录
+- [视频](https://pan.baidu.com/s/1f9yu-8JZlu-6vaPEfcVp3Q?pwd=1s23)

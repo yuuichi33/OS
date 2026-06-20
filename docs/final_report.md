@@ -19,7 +19,7 @@
 - **工作概述**
   - **功能实现**：共支持 37 个系统调用（其中**增量实现 16 个**）。包括内核级堆分配器（kmalloc/kfree）、按需分页（Lazy Allocation）、写时复制（COW Fork）、文件内存映射（mmap/munmap）、FCFS 与 RR 动态调度切换、轻量级线程（clone）、用户态快速同步互斥体（futex）以及信号量、异步定时器（Alarm）、软链接（Symlink）等模块。
   - **功能验证**：系统通过**增量的 20 项单元测试**、**xv6 原生 usertests 集成测试**，在 **grind 压力测试**下持续运行，未发生内核 Panic 或死锁。**达到课程标准。**
-  - **性能评估**：移植极简 Transformer 推理引擎 **llama.c** 并加载 **stories260K** 模型，针对**多核并行能力、同步原语效率及存储映射机制设计**对比实验，量化评估内核相关子系统的实际开销。
+  - **性能评估**：移植极简 Transformer 推理引擎 **llama.c** 并加载 **stories260K** 模型，针对**多核并行能力、同步原语效率及存储映射机制**设计对比实验，量化评估内核相关子系统的实际开销。
 
 ```mermaid
 graph TB
@@ -123,7 +123,7 @@ graph TB
 
 xv6 是一个面向教学的 Unix 风格操作系统，其代码结构清晰、模块划分合理，完整实现了进程管理、虚拟内存管理、文件系统、系统调用和异常处理等核心机制。
 
-本项目**基于 riscv 架构的 xv6**进行增量式开发，重点参考 Linux 和开源项目 Re-XVapor 以及 MIT 6.S081。项目拟在保持 xv6 原有体系结构稳定性的前提下，逐步扩展其功能，实现课程设计要求的操作系统关键机制，并在此基础上**引入部分现代 Unix/Linux 内核设计思想**，提高系统的完整性与可扩展性。
+本项目**基于 riscv 架构的 xv6** 进行增量式开发，重点参考 Linux 和开源项目 Re-XVapor 以及 MIT 6.S081。项目拟在保持 xv6 原有体系结构稳定性的前提下，逐步扩展其功能，实现课程设计要求的操作系统关键机制，并在此基础上**引入部分现代 Unix/Linux 内核设计思想**，提高系统的完整性与可扩展性。
 
 *为保证 Ubuntu 22.04 LTS 与 QEMU 版本兼容性，本项目将 xv6- riscv 代码强制回滚至 2022 年底稳定提交 74c1eba，将其作为 baseline 进行开发。*
 
@@ -323,11 +323,11 @@ struct {
 } kmalloc_mem;
 ```
 
-**2. 算法控制流 ：First-Fit 分配 + 相邻空闲块合并（Coalesce）**
+**2. 算法：First-Fit 分配 + 相邻空闲块合并**
 - **分配（kmalloc）**：将请求大小对齐至 8 字节。持锁遍历隐式空闲链表，寻找首个 is_free=1 且 size >= 请求大小 的块（First-Fit 策略）。
   - **Split（切分）**：若当前块大小超出请求大小与 Header 大小之和，将其分裂为前后两块，后半段重新初始化为空闲块插入链表。
   - 若无满足条件的空闲块，则释放锁并调用底层 kalloc() 申请新页，将其挂入链表头部，重新分配。
-- **释放（kmfree）**：将目标块标记为 is_free=1。随后扫描整个链表，检测物理地址相邻的空闲块（当前块末尾地址 == 下一个块起始地址），若连续则合并（Coalesce），防止碎片累积。若某块独占整张物理页，则归还给物理页分配器。
+- **释放（kmfree）**：将目标块标记为 is_free=1。随后扫描整个链表，检测物理地址相邻的空闲块（当前块末尾地址 == 下一个块起始地址），若连续则合并，防止碎片累积。若某块独占整张物理页，则归还给物理页分配器。
 
 **3. 核心代码**（`kernel/kalloc.c`）：
 ```c
@@ -384,9 +384,9 @@ void kmfree(void *addr) {
 
 为避免进程在 sbrk 申请大块堆内存时立即全量分配物理页造成的资源浪费，本项目实现按需分页机制，仅在进程实际访问虚拟地址时才通过缺页异常动态装载物理页，实现内存的惰性分配与按需使用。
 
-**1. 算法控制流：惰性分配与缺页补全**
+**1. 算法：惰性分配与缺页补全**
 - **申请时（sys_sbrk）**：仅调整进程虚拟地址空间上界 p->sz（p->sz += n），不调用 kalloc 申请物理页。
-- **缺页触发（usertrap）**：当进程实际读写未分配的虚拟地址时，触发缺页异常（scause == 13/15）。在 usertrap() 中通过 walk(pagetable, va, 0) 确认该虚拟地址合法（属于 [0, p->sz) 且未映射）。
+- **缺页触发（usertrap）**：当进程实际读写未分配的虚拟地址时，触发缺页异常（scause == 13/15）。在 usertrap() 中通过 walk(pagetable, va, 0) 确认该虚拟地址合法。
 - **物理页装载**：调用 kalloc() 分配物理物理页，并通过 mappages() 补齐页表项映射。
 - **透明访问**：重构 walkaddr() 与 copyout()，使内核在处理系统调用（如 read 写入 Lazy 区域）时，也能透明且安全地触发物理页装载。
 - 同时，修改 uvmunmap 与 uvmcopy，在检测到未映射页（PTE_V == 0）时选择跳过，不触发 panic。
@@ -478,10 +478,12 @@ int ref_get(uint64 pa) {
 #define PTE_COW (1L << 8)  // 写时复制标记：利用 RISC-V PTE 保留位[8]标识 COW 页
 ```
 
-**3. 算法控制流： COW Fork 两阶段控制流**
+**3. 算法：COW Fork 两阶段控制流**
 - **阶段一：Fork 时（uvmcopy）：共享页表**
+  
   遍历父进程页表。对可写（PTE_W）页面，清除写权限，打上 PTE_COW 标记。然后调用 ref_inc(pa) 递增引用计数，并使子进程页表指向同一物理页，实现零拷贝共享。
 - **阶段二：写入时（cow_alloc）：物理页分裂**
+  
   进程尝试写入打上 PTE_COW 的页面时，硬件触发 scause == 15。内核通过 cow_alloc() 拦截并处理：
   - 若引用计数 == 1（独占状态）：直接清除 PTE_COW 恢复写权限（PTE_W），原地分裂。
   - 若引用计数 > 1（共享状态）：分配新物理页，进行数据拷贝，将新页重新映射到当前虚拟地址并赋予 PTE_W 权限，同时原页引用计数递减。
@@ -673,7 +675,8 @@ struct proc {
 int sched_mode;  
 ```
 
-**2. 算法控制流： 调度切换控制**
+**2. 算法：调度切换控制**
+
 调度器主循环 `scheduler()` 在空闲核心上运行。每次遍历进程表时，通过 `sched_mode` 确定调度策略：
 - **RR 模式（0）**：每次时钟中断触发时执行 `yield()`，当前进程让出 CPU 并标记为 `RUNNABLE`，CPU 重新轮转扫描首个可运行进程。
 - **FCFS 模式（1）**：遍历进程表，在所有 `RUNNABLE` 的就绪进程中选取创建时间戳 `ctime` **最小**（即最早到达）的一个投入运行。时钟中断下不抢占进程，当前进程持续运行至主动 `exit()` 或发生 IO 阻塞（`sleep()`）调用 `sched()` 让出 CPU。
@@ -734,7 +737,8 @@ void scheduler(void) {
 为支持父进程对特定子进程的精准回收与非阻塞状态查询，本项目在原有 wait 机制上扩展了 waitpid 系统调用，支持按目标 PID 匹配特定子进程，并通过 WNOHANG 选项实现非阻塞轮询，避免父进程在无子进程退出时被不必要地挂起。
 
 **1. 算法控制流：精准子进程回收与非阻塞**
-在原有 `wait` 机制上扩展：
+
+在原有 wait 机制上扩展：
 - **精准回收**：若参数 target_pid > 0，则扫描子进程表时仅匹配 PID 对应的特定子进程；若 target_pid == -1，回退为回收任意子进程。
 - **非阻塞（WNOHANG）**：若指定 WNOHANG 且匹配的目标子进程非 ZOMBIE 状态，函数不挂起父进程，而是**立即返回 0**，允许父进程继续执行。
 
@@ -788,7 +792,8 @@ struct sem {
 };
 ```
 
-**2. 算法控制流：基于 sleep/wakeup 的进程级锁机制**
+**2. 算法：基于 sleep/wakeup 的进程级锁机制**
+
 利用内核字节级堆分配器 kmalloc 动态创建及回收 sem。在 sem_wait 中，先递减计数；若计数变为负数（资源耗尽），调用内核 sleep 挂起进程。P/V 操作均直接使用信号量内存地址作为睡眠通道（chan），从而在 sem_signal 中通过 wakeup(s) 实现精准调度。
 
 **3. 核心代码**（`kernel/sem.c`）：
@@ -832,7 +837,8 @@ struct proc {
 };
 ```
 
-**2. 算法控制流：中断重定向与恢复**
+**2. 算法：中断重定向与恢复**
+
 当时钟中断触发且 alarm_ticks 达到上限时，内核动态分配（kmalloc）一块 struct trapframe 保存当前所有通用寄存器与程序计数器（epc），重置 alarm_ticks。随后将 p->trapframe->epc 强行覆盖为处理函数 alarm_handler 并在进程返回时跳转执行。当处理函数完成后，用户态显式执行 sigreturn 系统调用，将备份现场完整复制回当前内核 trapframe，并重置 alarm_running。
 
 **3. 核心代码**（`kernel/trap.c` / `kernel/sysproc.c`）：
@@ -873,7 +879,7 @@ struct file {
 };
 ```
 
-**2. 算法控制流：多核保护与随机访问**
+**2. 算法：多核保护与随机访问**
 - 支持 SEEK_SET（开头）、SEEK_CUR（当前）、SEEK_END（末尾）模式。
 - 操作前调用 ilock(f->ip) 获取 Inode 级睡眠锁，保障在多进程/多核竞争下更新偏移量和文件大小一致。过滤非法 fd 与非磁盘文件定位。
 
@@ -982,7 +988,7 @@ struct proc {
 };
 ```
 
-**2. 算法控制流：物理页共享多线程（LWP）模型**
+**2. 算法：物理页共享多线程（LWP）模型**
 - **共享与隔离**：为子线程分配独立的 PCB 及专属的 trapframe 物理页，在 CPU 调度上下文切换时隔离核心寄存器。
 - **物理共享**：自定义 uvmsharecopy，将父进程的用户态虚拟页表项原样（不加 PTE_COW）复制到子线程的独立页表中，共享物理内存并调用 ref_inc 递增页计数。
 - **状态拷贝与资源共享**：
@@ -1083,7 +1089,7 @@ flowchart TB
 struct spinlock futex_lock; // 全局锁保护挂起原子性
 ```
 
-**2. 算法控制流："原子检查-挂起"防御 Lost-Wakeup 唤醒竞争**
+**2. 算法："原子检查-挂起"防御 Lost-Wakeup 唤醒竞争**
 - **FUTEX_WAIT 挂起算法**：
   - 物理 Key 提取：验证地址对齐，调用 walkaddr 获取虚拟地址对应的物理地址 paddr，以此作为独一无二的同步睡眠通道。
   - 原子校验防 Lost-Wakeup：持全局锁 futex_lock，使用 copyin 二次读取用户态锁的实际值。若值已被改变（说明锁已被快速释放），直接释放锁退出，避免产生“检查与挂起”之间的竞态窗口。
@@ -1168,7 +1174,7 @@ struct uproc {
 };
 ```
 
-**2. 算法控制流：进程表快照采集与安全拷贝**
+**2. 算法：进程表快照采集与安全拷贝**
 - **内核态采集（sys_getprocs）**：遍历全局进程表 proc[]，对每个非 UNUSED 状态的进程持锁读取其 pid、state、sz、name，存入内核临时缓冲区 kprocs[]。
 - **安全拷贝至用户态**：通过 copyout() 将内核缓冲区中的进程快照数组安全写入用户态提供的内存地址 uaddr，由页表机制自动处理 COW/Lazy 缺页。
 - **用户态格式化输出（ps.c）**：用户程序调用 getprocs() 获取快照数组，按列格式化输出 PID、STATE、SIZE、NAME，其中 state 枚举值映射为可读字符串。
@@ -1218,7 +1224,7 @@ int main(int argc, char *argv[]) {
 
 ## 四、测试与验证
 
-为了验证系统在功能性、稳定性和高负载下的实际表现，本项目构建了一个三维**测试与验证体系**：
+为了验证系统在功能性、稳定性和高负载下的实际表现，本项目构建了一个三维**测试与验证体系**，如图。
 
 ```mermaid
 flowchart TD
@@ -1256,13 +1262,13 @@ flowchart TD
 - **集成测试**：实现**统一测试框架 alltests.c**，对新增**功能测试、异常测试以及 xv6 原生 usertests** 共 21 项进行统一调度，实现一键式自动化测试。通过集成运行验证各模块之间的兼容性与协同工作能力，并检查系统整体稳定性。
 - **压力测试**：运行 xv6 原生的 **grind** 测试，测试系统稳定性。
 
-具体：[测试说明文档](devlog/test.md) `(devlog/test.md)`
+*具体：[测试说明文档](devlog/test.md) `(devlog/test.md)`*
 
 ### 4.2 alltests 集成测试内容
 
-本项目设计了 alltests 集成测试框架，用于统一调度与运行增量的功能测试。测试项涵盖以下几个方面：
+本项目设计了 alltests 集成测试框架，用于统一调度与运行增量测试。测试项涵盖以下两个方面：
 
-- **功能测试**：crash_test.c、ps.c、 kmalloctest.c、sched.c、schedtest.c、waitpidtest.c、semtest.c、alarmtest.c、symlinktest.c、lazytests.c、cowtest.c、mmaptest.c、clonetest.c、futextest.c。
+- **功能及异常测试**：crash_test.c、ps.c、 kmalloctest.c、sched.c、schedtest.c、waitpidtest.c、semtest.c、alarmtest.c、symlinktest.c、lazytests.c、cowtest.c、mmaptest.c、clonetest.c、futextest.c。
 
 - xv6 官方综合测试集 **usertests.c** ，覆盖：
     - 系统调用参数合法性：非法用户指针、越界地址、超长字符串
@@ -1283,14 +1289,14 @@ flowchart TD
 
 ## 五、LLM 推理引擎移植与性能验证
 
-随着生成式人工智能的高速发展，大语言模型（LLM）的推理任务正逐步从云端向边缘侧与嵌入式设备迁移。在计算资源有限的软硬件环境下，**提高 AI 推理程序的运行速度并降低其资源开销**，不仅依赖于算法层面的量化与剪枝，也取决于底层操作系统能否提供高效的**多核调度、快速的线程同步以及零拷贝的存储访问**。
+随着生成式人工智能的高速发展，大语言模型（LLM）的推理任务正逐步从云端向边缘侧与嵌入式设备迁移。在**计算资源有限**的软硬件环境下，**提高 AI 推理程序的运行速度并降低其资源开销**，不仅依赖于算法层面的量化与剪枝，也取决于底层操作系统能否提供高效的**多核调度、快速的线程同步以及零拷贝的存储访问**。
 
-原生的 **xv6-riscv** 作为一个教学操作系统，其设计初衷在于**展示 Unix 的核心概念**，因而在应对算力密集型与 I/O 密集型并存的真实 AI 负载时，存在**并发能力弱、同步开销大以及 I/O 效率较低**的局限。
+原生的 **xv6-riscv** 作为一个教学操作系统，其设计初衷在于展示 Unix 的核心概念，因而在应对算力密集型与 I/O 密集型并存的真实 AI 负载时，存在**并发能力弱、同步开销大以及 I/O 效率较低**的局限。
 
 基于上述背景，本项目在 alltests 测试全部通过、grind 长时间运行系统稳定的前提下，将极简 Transformer 推理引擎 **llama2.c**（由 Andrej Karpathy 开源）移植至 xv6-riscv，命名为 llama.c。本章通过在系统内加载运行 stories260K.bin 模型（1.04MB），设计多组系统级对比实验。其核心目的在于：以大模型推理为真实重载应用闭环，**量化评估**本项目增量实现的轻量级线程（Clone）、快速同步（Futex）和存储映射（mmap）等优化机制，**相较于 xv6 传统基线机制所取得的性能改善幅度**。
 
 
-- 实验程序 llama.c 移植自 [karpathy/llama2.c](https://github.com/karpathy/llama2.c)，模型使用 [stories260K.bin](https://huggingface.co/karpathy/tinyllamas)（约 1.04MB），分词器使用 tok512.bin。
+*实验程序 llama.c 移植自 [karpathy/llama2.c](https://github.com/karpathy/llama2.c)，模型使用 [stories260K.bin](https://huggingface.co/karpathy/tinyllamas)（约 1.04MB），分词器使用 tok512.bin。*
 
 ### 5.1 llama.c 移植
 
@@ -1340,9 +1346,6 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
 - **实验设计**
   - RR 调度，4 个线程，3 轮重复，每轮生成 10 个 Token。
   - 分别使用 **Spinlock、Pipe、Futex** 三种同步方式。
-    - Spinlock：通过在用户态对原子共享标记变量进行无限忙等待，不执行系统调用。
-    - Pipe：工作线程通过 read() 系统调用阻塞在内核管道上，主线程通过 write() 写入同步信号唤醒。
-    - Futex：工作线程在状态未就绪时通过 futex_wait 进入内核挂起，主线程完成计算后通过 futex_wake 精准唤醒。
 
 - **实验数据**
 
@@ -1474,5 +1477,8 @@ llama.c 是一个极简的 Transformer 推理程序。它加载预训练的模�
 - https://pdos.csail.mit.edu/6.S081/2020/labs/lazy.html
 - https://fail.lingfei.xyz/tags/xv6/
 - https://github.com/karpathy/llama2.c
+
+## 附录：测试录屏
+-  https://pan.baidu.com/s/1f9yu-8JZlu-6vaPEfcVp3Q?pwd=1s23
 
 <!-- </div> -->
